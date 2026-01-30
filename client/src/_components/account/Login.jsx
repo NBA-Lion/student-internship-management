@@ -1,0 +1,85 @@
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { useForm } from "react-hook-form";
+import { yupResolver } from '@hookform/resolvers/yup';
+import * as Yup from 'yup';
+
+import { useUserActions } from '_actions';
+import { Redirect } from 'react-router-dom';
+import { authAtom } from '_state';
+import { useRecoilValue } from 'recoil';
+import { useAuthWrapper } from '_helpers';
+export { Login };
+
+function Login(props) {
+    const userActions = useUserActions();
+    const auth = useRecoilValue(authAtom);
+    const authWrapper = useAuthWrapper();
+    const [loginDone, setLoginDone] = useState(false)
+    // form validation rules 
+    const validationSchema = Yup.object().shape({
+        username: Yup.string().required('Vui lòng điền tên người dùng'),
+        password: Yup.string().required('Vui lòng điền mật khẩu')
+    });
+    const formOptions = { resolver: yupResolver(validationSchema) };
+
+    // get functions to build form with useForm() hook
+    const { register, handleSubmit, formState } = useForm(formOptions);
+    const { errors, isSubmitting } = formState;
+
+    useEffect(() => {
+        async function loadUser(){
+            await authWrapper.loadUser();
+            setLoginDone(true);
+        }
+        if (auth)
+            loadUser();
+        else {
+            userActions.logout();
+        }
+    }, [auth])
+    return (
+        loginDone 
+            ? <Redirect to={{ pathname: '/', state: { from: props.location } }} />
+            : (
+                <>
+                    <h4>Đăng nhập hệ thống</h4>
+                    <p className="text-muted mb-3">Vui lòng đăng nhập để tiếp tục quản lý thực tập.</p>
+                    <form onSubmit={handleSubmit(userActions.login)}>
+                        <div className="form-group">
+                            <label>Tài khoản (email hoặc MSSV)</label>
+                            <input
+                                name="username"
+                                type="text"
+                                {...register('username')}
+                                className={`form-control ${errors.username ? 'is-invalid' : ''}`}
+                                placeholder="Email hoặc MSSV"
+                            />
+                            <div className="invalid-feedback">{errors.username?.message}</div>
+                        </div>
+                        <div className="form-group">
+                            <label>Mật khẩu</label>
+                            <input
+                                name="password"
+                                type="password"
+                                {...register('password')}
+                                className={`form-control ${errors.password ? 'is-invalid' : ''}`}
+                            />
+                            <div className="invalid-feedback">{errors.password?.message}</div>
+                        </div>
+                        <button disabled={isSubmitting} className="btn btn-primary btn-block">
+                            {isSubmitting && <span className="spinner-border spinner-border-sm mr-1"></span>}
+                            Đăng nhập
+                        </button>
+                        <div className="auth-links">
+                            <Link to="passwordrecover" className="btn btn-link p-0">Quên mật khẩu</Link>
+                            <Link to="register" className="btn btn-link p-0">Chưa có tài khoản? Đăng ký</Link>
+                        </div>
+                    </form>
+                    <div className="auth-footnote">
+                        Bạn có thể đăng nhập bằng Email hoặc MSSV đã đăng ký.
+                    </div>
+                </>
+            )
+    );
+}

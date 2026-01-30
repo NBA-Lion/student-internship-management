@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+client/node_modules/
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Build outputs
+client/build/
+dist/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Uploads (keep folder structure)
+uploads/chat/*
+uploads/documents/*
+uploads/imports/*
+!uploads/chat/.gitkeep
+!uploads/documents/.gitkeep
+!uploads/imports/.gitkeep
+
+# Temporary files
+*.tmp
+*.temp
+
+# Coverage
+coverage/
+
+# Debug
+.cursor/
