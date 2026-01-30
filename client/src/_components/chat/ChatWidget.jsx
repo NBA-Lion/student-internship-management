@@ -48,15 +48,42 @@ function chatReducer(state, action) {
             const receiverId = message.to?.vnu_id || message.receiver;
             const isFromPartner = senderId === partnerId;
             const isToPartner = receiverId === partnerId;
+            const isMyMessage = senderId === myId || message.selfSend || message.isSender;
             
-            let newMessages = state.currentMessages;
+            let newMessages = [...state.currentMessages];
+            
+            // ============================================
+            // SMART DEDUPLICATION for Optimistic UI
+            // ============================================
             if (isFromPartner || isToPartner) {
-                const exists = state.currentMessages.some(m => m._id === message._id);
-                if (!exists) {
-                    newMessages = [...state.currentMessages, message];
+                // Check for exact ID match
+                const existsById = newMessages.some(m => m._id === message._id);
+                
+                // Check for optimistic message that server is confirming
+                // (same sender, receiver, message content within 10 seconds)
+                const optimisticIndex = isMyMessage ? newMessages.findIndex(m => 
+                    m._isOptimistic && 
+                    m.message === message.message && 
+                    m.receiver === message.receiver
+                ) : -1;
+
+                if (existsById) {
+                    // Already have this exact message, skip
+                    console.log('>>> [Reducer] Skipping duplicate message:', message._id);
+                } else if (optimisticIndex >= 0) {
+                    // Replace optimistic message with server-confirmed version
+                    console.log('>>> [Reducer] Replacing optimistic message with confirmed:', message._id);
+                    newMessages[optimisticIndex] = { ...message, _isOptimistic: false };
+                } else {
+                    // New message, add it
+                    console.log('>>> [Reducer] Adding new message:', message._id);
+                    newMessages = [...newMessages, message];
                 }
             }
             
+            // ============================================
+            // UPDATE CONVERSATIONS LIST
+            // ============================================
             const otherUserId = senderId === myId ? receiverId : senderId;
             let newConversations = [...state.conversations];
             const convIndex = newConversations.findIndex(c => 
@@ -77,13 +104,16 @@ function chatReducer(state, action) {
                 };
                 conv.timestamp = message.createdAt;
                 
+                // Only increment unread if message is from someone else AND not in active chat
                 if (senderId !== myId && partnerId !== otherUserId) {
                     conv.unread_count = (conv.unread_count || 0) + 1;
                 }
                 
+                // Move conversation to top
                 newConversations.splice(convIndex, 1);
                 newConversations.unshift(conv);
-            } else if (message.newContact) {
+            } else if (message.newContact || (!isMyMessage && convIndex < 0)) {
+                // New contact - add to list
                 newConversations.unshift({
                     partner_id: otherUserId,
                     partner: senderId === myId ? message.to : message.from,
@@ -311,24 +341,79 @@ export default function ChatWidget() {
         const handleNewMessage = (msg) => {
             const senderId = msg.from?.vnu_id || msg.sender;
             const receiverId = msg.to?.vnu_id || msg.receiver;
-            const isMyMessage = msg.selfSend || senderId === myStudentCode;
+            const isMyMessage = msg.selfSend || msg.isSender || senderId === myStudentCode;
             const currentSelectedId = selectedUserRef.current?.vnu_id || selectedUserRef.current?.student_code;
             
+            console.log('>>> [ChatWidget] NewMessage received:', {
+                msgId: msg._id,
+                senderId,
+                receiverId,
+                isMyMessage,
+                currentSelectedId,
+                selfSend: msg.selfSend,
+                isSender: msg.isSender
+            });
+
+            // ============================================
+            // CRITICAL: Check if this message is for current conversation
+            // ============================================
+            const isFromCurrentPartner = senderId === currentSelectedId;
+            const isToCurrentPartner = receiverId === currentSelectedId;
+            const isRelevantToCurrentChat = isFromCurrentPartner || isToCurrentPartner;
+
+            // ============================================
+            // CASE 1: My own message coming back from server
+            // Skip if we already showed it optimistically
+            // ============================================
+            if (isMyMessage) {
+                // Server confirmed our message - we already showed it optimistically
+                // But we need to update conversations list for the preview
+                dispatch({ 
+                    type: 'ADD_MESSAGE', 
+                    payload: { message: msg, partnerId: currentSelectedId, myId: myStudentCode }
+                });
+                console.log('>>> [ChatWidget] Own message confirmed by server');
+                return;
+            }
+
+            // ============================================
+            // CASE 2: Incoming message from the person I'm chatting with
+            // INSTANTLY show it in the chat window
+            // ============================================
+            if (isFromCurrentPartner && drawerOpenRef.current) {
+                console.log('>>> [ChatWidget] Message from active chat partner - adding to UI');
+                dispatch({ 
+                    type: 'ADD_MESSAGE', 
+                    payload: { message: msg, partnerId: currentSelectedId, myId: myStudentCode }
+                });
+                
+                // Auto scroll to see the new message
+                setTimeout(() => {
+                    if (messagesEndRef.current) {
+                        messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+                    }
+                }, 100);
+                return;
+            }
+
+            // ============================================
+            // CASE 3: Message from someone else (not current chat)
+            // Show notification, update unread count
+            // ============================================
             dispatch({ 
                 type: 'ADD_MESSAGE', 
                 payload: { message: msg, partnerId: currentSelectedId, myId: myStudentCode }
             });
-            
-            if (!isMyMessage) {
-                if (!drawerOpenRef.current || currentSelectedId !== senderId) {
-                    playNotificationSound();
-                    if (Notification.permission === 'granted') {
-                        new Notification(`Tin nhắn từ ${msg.from?.name || 'Người dùng'}`, {
-                            body: msg.type === 'image' ? '📷 Đã gửi một hình ảnh' : msg.message,
-                            icon: '/favicon.ico',
-                            tag: `chat-${senderId}`
-                        });
-                    }
+
+            // Play notification sound and show desktop notification
+            if (!drawerOpenRef.current || currentSelectedId !== senderId) {
+                playNotificationSound();
+                if (Notification.permission === 'granted') {
+                    new Notification(`Tin nhắn từ ${msg.from?.name || 'Người dùng'}`, {
+                        body: msg.type === 'image' ? '📷 Đã gửi một hình ảnh' : msg.message,
+                        icon: '/favicon.ico',
+                        tag: `chat-${senderId}`
+                    });
                 }
             }
         };
@@ -421,16 +506,62 @@ export default function ChatWidget() {
     const handleSendMessage = useCallback(() => {
         if (!messageText.trim() || !selectedUser) return;
         const userId = selectedUser.vnu_id || selectedUser.student_code;
+        const trimmedMessage = messageText.trim();
         
-        if (socketWrapper.socket) {
-            socketWrapper.socket.emit('StopTyping', { to: userId });
-            socketWrapper.socket.emit('NewMessage', { to: userId, message: messageText.trim() });
-        }
-        
+        // ============================================
+        // OPTIMISTIC UI: Show message INSTANTLY before server confirms
+        // ============================================
+        const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const optimisticMessage = {
+            _id: tempId,
+            message: trimmedMessage,
+            type: 'text',
+            sender: myStudentCode,
+            receiver: userId,
+            from: {
+                vnu_id: myStudentCode,
+                id: myStudentCode,
+                name: currentUser.full_name || 'Tôi'
+            },
+            to: {
+                vnu_id: userId,
+                id: userId,
+                name: selectedUser.name || userId
+            },
+            createdAt: new Date().toISOString(),
+            createdDate: new Date().toISOString(),
+            selfSend: true,
+            isSender: true,
+            _isOptimistic: true // Flag to identify optimistic messages
+        };
+
+        // IMMEDIATELY add to state (Optimistic Update)
+        dispatch({ 
+            type: 'ADD_MESSAGE', 
+            payload: { 
+                message: optimisticMessage, 
+                partnerId: userId, 
+                myId: myStudentCode 
+            }
+        });
+
+        // Clear input immediately for snappy UX
         setMessageText('');
         setShowEmojiPicker(false);
+
+        // Emit to server in background
+        if (socketWrapper.socket) {
+            socketWrapper.socket.emit('StopTyping', { to: userId });
+            socketWrapper.socket.emit('NewMessage', { 
+                to: userId, 
+                message: trimmedMessage,
+                tempId: tempId // Send tempId so server can help deduplicate
+            });
+        }
+
+        // Scroll to bottom after state update
         setTimeout(() => scrollToBottom(), 50);
-    }, [messageText, selectedUser, scrollToBottom]);
+    }, [messageText, selectedUser, scrollToBottom, myStudentCode, currentUser]);
 
     const handleSearch = useCallback(async (value) => {
         setSearchText(value);
@@ -697,11 +828,13 @@ export default function ChatWidget() {
                     <div style={{ flex: 1, marginLeft: 12, overflow: 'hidden', minWidth: 0 }}>
                         <div style={{ fontWeight: unread > 0 ? 700 : 600, fontSize: 14, display: 'flex', alignItems: 'center' }}>
                             {name}
-                            {partner.role && (
-                                <span style={{ fontSize: 11, color: '#8c8c8c', fontWeight: 400, marginLeft: 6 }}>
-                                    ({partner.role === 'student' ? 'SV' : partner.role === 'teacher' ? 'GV' : 'Admin'})
-                                </span>
-                            )}
+                                        {partner.role && (
+                                            <span style={{ fontSize: 11, color: '#8c8c8c', fontWeight: 400, marginLeft: 6 }}>
+                                                ({partner.role === 'admin' ? 'Admin' : 
+                                                  partner.role === 'lecturer' ? 'GV' : 
+                                                  partner.role === 'teacher' ? 'GV' : 'SV'})
+                                            </span>
+                                        )}
                         </div>
                         <div style={{ color: unread > 0 ? '#050505' : '#65676b', fontSize: 13, fontWeight: unread > 0 ? 600 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {description}

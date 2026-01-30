@@ -725,4 +725,175 @@ router.get("/all", authMiddleware, async (req, res) => {
   }
 });
 
+// ============================================
+// GET /api/user/cleanup-fake-admins - Xóa admin giả (Chạy 1 lần)
+// ============================================
+router.get("/cleanup-fake-admins", async (req, res) => {
+  try {
+    console.log(">>> [Cleanup] Bắt đầu dọn dẹp fake admin accounts...");
+
+    // ============================================
+    // STEP 1: Định nghĩa REAL ADMIN criteria
+    // Chỉ giữ lại admin có các đặc điểm sau:
+    // ============================================
+    const REAL_ADMIN_CRITERIA = {
+      emails: ['admin@intern.local', 'admin@admin.com', 'admin@vnu.edu.vn'],
+      student_codes: ['ADMIN', 'admin', 'ADMIN001'],
+      names: ['Trưởng Phòng Đào Tạo', 'Admin', 'Administrator', 'Quản trị viên']
+    };
+
+    // ============================================
+    // STEP 2: Tìm TẤT CẢ users có role = 'admin'
+    // ============================================
+    const allAdmins = await User.find({ role: 'admin' });
+    console.log(`>>> [Cleanup] Tìm thấy ${allAdmins.length} admin accounts`);
+
+    // ============================================
+    // STEP 3: Phân loại REAL vs FAKE admin
+    // ============================================
+    const realAdmins = [];
+    const fakeAdmins = [];
+
+    for (const admin of allAdmins) {
+      const isRealAdmin = 
+        REAL_ADMIN_CRITERIA.emails.includes(admin.email?.toLowerCase()) ||
+        REAL_ADMIN_CRITERIA.student_codes.includes(admin.student_code?.toUpperCase()) ||
+        REAL_ADMIN_CRITERIA.student_codes.includes(admin.student_code) ||
+        REAL_ADMIN_CRITERIA.names.some(name => 
+          admin.full_name?.toLowerCase().includes(name.toLowerCase())
+        ) ||
+        // Admin nếu student_code không bắt đầu bằng "SV" hoặc "GV"
+        (!admin.student_code?.toUpperCase().startsWith('SV') && 
+         !admin.student_code?.toUpperCase().startsWith('GV') &&
+         admin.student_code?.toUpperCase() === 'ADMIN');
+
+      if (isRealAdmin) {
+        realAdmins.push(admin);
+      } else {
+        fakeAdmins.push(admin);
+      }
+    }
+
+    console.log(`>>> [Cleanup] Real admins: ${realAdmins.length}`);
+    console.log(`>>> [Cleanup] Fake admins to delete: ${fakeAdmins.length}`);
+
+    // ============================================
+    // STEP 4: XÓA các fake admin
+    // ============================================
+    const deletedIds = [];
+    const deletedInfo = [];
+
+    for (const fakeAdmin of fakeAdmins) {
+      deletedIds.push(fakeAdmin._id);
+      deletedInfo.push({
+        _id: fakeAdmin._id,
+        student_code: fakeAdmin.student_code,
+        full_name: fakeAdmin.full_name,
+        email: fakeAdmin.email
+      });
+      
+      console.log(`>>> [Cleanup] Xóa fake admin: ${fakeAdmin.student_code} - ${fakeAdmin.full_name}`);
+    }
+
+    let deleteResult = { deletedCount: 0 };
+    if (deletedIds.length > 0) {
+      deleteResult = await User.deleteMany({ _id: { $in: deletedIds } });
+    }
+
+    // ============================================
+    // STEP 5: Trả về kết quả
+    // ============================================
+    return res.json({
+      status: "Success",
+      message: `Đã xóa ${deleteResult.deletedCount} fake admin accounts.`,
+      data: {
+        totalAdminsBefore: allAdmins.length,
+        realAdminsKept: realAdmins.map(a => ({
+          student_code: a.student_code,
+          full_name: a.full_name,
+          email: a.email
+        })),
+        fakeAdminsDeleted: deletedInfo,
+        deletedCount: deleteResult.deletedCount
+      }
+    });
+
+  } catch (error) {
+    console.error(">>> [Cleanup] Lỗi:", error.message);
+    return res.status(500).json({ 
+      status: "Error", 
+      message: "Lỗi khi cleanup: " + error.message 
+    });
+  }
+});
+
+// ============================================
+// GET /api/user/fix-student-roles - Sửa role cho users có mã SV*
+// ============================================
+router.get("/fix-student-roles", async (req, res) => {
+  try {
+    console.log(">>> [Fix Roles] Bắt đầu sửa role cho students...");
+
+    // Tìm users có student_code bắt đầu bằng "SV" nhưng role không phải "student"
+    const wrongRoleUsers = await User.find({
+      student_code: { $regex: /^SV/i },
+      role: { $ne: 'student' }
+    });
+
+    console.log(`>>> [Fix Roles] Tìm thấy ${wrongRoleUsers.length} users cần sửa`);
+
+    const fixedUsers = [];
+    for (const user of wrongRoleUsers) {
+      await User.updateOne(
+        { _id: user._id },
+        { $set: { role: 'student' } }
+      );
+      fixedUsers.push({
+        student_code: user.student_code,
+        full_name: user.full_name,
+        oldRole: user.role,
+        newRole: 'student'
+      });
+      console.log(`>>> [Fix Roles] Sửa ${user.student_code}: ${user.role} -> student`);
+    }
+
+    return res.json({
+      status: "Success",
+      message: `Đã sửa role cho ${fixedUsers.length} users.`,
+      data: {
+        fixedCount: fixedUsers.length,
+        fixedUsers: fixedUsers
+      }
+    });
+
+  } catch (error) {
+    console.error(">>> [Fix Roles] Lỗi:", error.message);
+    return res.status(500).json({ 
+      status: "Error", 
+      message: "Lỗi khi fix roles: " + error.message 
+    });
+  }
+});
+
+// ============================================
+// GET /api/user/list-admins - Liệt kê tất cả admins (Debug)
+// ============================================
+router.get("/list-admins", async (req, res) => {
+  try {
+    const admins = await User.find({ role: 'admin' })
+      .select('student_code full_name email role createdAt');
+
+    return res.json({
+      status: "Success",
+      message: `Tìm thấy ${admins.length} admin accounts.`,
+      data: admins
+    });
+  } catch (error) {
+    return res.status(500).json({ 
+      status: "Error", 
+      message: error.message 
+    });
+  }
+});
+
 module.exports = router;

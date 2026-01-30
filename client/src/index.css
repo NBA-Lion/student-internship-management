@@ -1,5 +1,47 @@
+/* ============================================
+   GLOBAL STYLES - Dark Theme Base
+   ============================================ */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  min-height: 100vh;
+  background-color: #0f172a;
+}
 
 body {
-  
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: #1f2937;
+  line-height: 1.5;
 }
- 
+
+/* Prevent white flash on page load */
+#root {
+  min-height: 100vh;
+}
+
+/* ============================================
+   FIX: Remove Ant Design Layout borders/backgrounds
+   for Auth pages (Login/Register)
+   ============================================ */
+.auth-wrapper .ant-layout,
+.auth-wrapper .ant-layout-content,
+.auth-wrapper .ant-layout-header,
+.auth-wrapper .ant-layout-sider {
+  background: transparent !important;
+  border: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* Hide header and nav on auth pages */
+.auth-wrapper .ant-layout-header,
+.auth-wrapper .ant-layout-sider {
+  display: none !important;
+}

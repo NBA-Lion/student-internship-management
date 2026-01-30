@@ -1,14 +1,18 @@
 import { useRecoilState } from 'recoil';
 import { useFetchWrapper } from '_helpers';
-// import * as Configs from './Constant'; 
-import { curChatPersonAtom, curListMessagesAtom, curListContactAtom, waitForUpdateLatestMsgAtom } from '../_state/chat';
+import { 
+    curChatPersonAtom, 
+    curListMessagesAtom, 
+    curListContactAtom, 
+    waitForUpdateLatestMsgAtom,
+    waitToAddContactAtom,
+    unreadCountsAtom 
+} from '../_state/chat';
 import { alertBachAtom } from '../_state/alert_bach';
-import { waitToAddContactAtom } from '../_state/chat';
 
 function useChatWrapper() {
     const fetchWrapper = useFetchWrapper();
     
-    // SỬA LỖI: Thêm dấu phẩy ở đầu để bỏ qua biến 'alert' thừa
     const [, setAlert] = useRecoilState(alertBachAtom);
     
     const [curChatPerson, setCurChatPerson] = useRecoilState(curChatPersonAtom);
@@ -17,6 +21,7 @@ function useChatWrapper() {
     
     const [waitingToAddContact, setWaitingToAddContact] = useRecoilState(waitToAddContactAtom);
     const [listUpdateLatestMsg, setListUpdateLatestMsg] = useRecoilState(waitForUpdateLatestMsgAtom);
+    const [unreadCounts, setUnreadCounts] = useRecoilState(unreadCountsAtom);
 
     // --- 1. LẤY DANH SÁCH LIÊN HỆ GẦN ĐÂY ---
     async function getRecentContact() {
@@ -63,6 +68,9 @@ function useChatWrapper() {
                 
                 setCurChatPerson(student_code);
                 setCurListMessage(res.data || res.message || []);
+                
+                // Clear unread count for this conversation
+                clearUnreadCount(student_code);
             }
             
             return res;
@@ -70,6 +78,21 @@ function useChatWrapper() {
             console.error(e);
             setAlert({message: "Lỗi tải tin nhắn", description: e.toString()});
         }
+    }
+
+    // --- 3. CLEAR UNREAD COUNT ---
+    function clearUnreadCount(userId) {
+        if (!userId) return;
+        setUnreadCounts(prev => {
+            const newCounts = { ...prev };
+            delete newCounts[userId];
+            return newCounts;
+        });
+    }
+
+    // --- 4. GET UNREAD COUNT FOR A USER ---
+    function getUnreadCount(userId) {
+        return unreadCounts[userId] || 0;
     }
 
     return {
@@ -94,7 +117,13 @@ function useChatWrapper() {
         
         listUpdateLatestMsg,
         setListUpdateLatestMsg,
-        waitForUpdateLatestMsgAtom
+        waitForUpdateLatestMsgAtom,
+        
+        // Unread counts
+        unreadCounts,
+        setUnreadCounts,
+        clearUnreadCount,
+        getUnreadCount
     };
 }
 

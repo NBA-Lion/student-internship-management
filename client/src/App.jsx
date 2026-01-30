@@ -15,7 +15,7 @@ import Socket from '_components/bach_component/Socket/socket';
 import LinearProgress from '@mui/material/LinearProgress';
 
 // ========== LAZY LOAD - Chỉ tải khi cần, giảm thời gian load trang đầu ==========
-const Account = lazy(() => import('_components/account').then(m => ({ default: m.Account })));
+const Account = lazy(() => import('_components/account/Account'));
 const Dashboard = lazy(() => import('_components/dashboard').then(m => ({ default: m.Dashboard })));
 const Feed = lazy(() => import('_components/feed').then(m => ({ default: m.Feed })));
 const Chat = lazy(() => import('_components/chat').then(m => ({ default: m.Chat })));
@@ -122,51 +122,64 @@ function App() {
         setDrawerVisible(false);
     };
 
+    // Check if current path is auth page
+    const isAuthPage = window.location.pathname.startsWith('/account');
+
     return (
         <div className={'app-container' + (authWrapper.tokenValue ? ' bg-light' : '')}>
             <Router history={history}>
                 {authWrapper.tokenValue && <Socket></Socket>}
-            
-                <Layout>
-                    <Header style={{ position: 'sticky', top: 0, zIndex: 1, width: '100%' }}>
-                        <Row gutter={0}>
-                            <Col className="gutter-row" flex="1 1 500px">
-                                <div style={style}>
-                                    <Title style={{ padding: '15px 0px 0px 0px', color: 'white' }} level={3}> Website Quản lý Sinh viên Thực tập </Title>
-                                </div>
-                            </Col>
-                            <Col style={{minWidth:"300px"}} span='auto'>
-                                <div>
-                                    <div style={{color: 'white', fontSize: '14px', textAlign: 'right', marginRight:'20px'}}> 
-                                        <b>{ClassNameDisplay()}</b>
-                                    </div>
-                                </div>
-                            </Col>
-                            
-                        </Row>
-                    </Header> 
-                    <Layout>
-                        <Nav onLogout={userActions.logout} auth={authWrapper.tokenValue} userData={userData} classID={classWrapper.curClass ? (classWrapper.curClass._id || classWrapper.curClass.class_id) : ""}/>
-                        
-                        <Layout>
-                            <Content style={{ margin: '20px 16px' } }>
-                                <Suspense fallback={<PageFallback />}>
-                                    <Switch>
-                                        <PrivateRoute exact path="/" component={Home} />
-                                        <Route path="/account" component={Account} />
-                                        <PrivateRoute path="/chat" component={Chat} />
-                                        <PrivateRoute path="/profile" component={Profile} />
-                                        <PrivateRoute exact path="/dbportal" component={DBPortal} />
-                                        <PrivateRoute exact path="/admin/students" component={AdminStudents} />
-                                        <PrivateRoute exact path="/internship" component={InternshipTabs} />
-                                        <PrivateRoute path="/:classID" component={Child} />
-                                        <Redirect from="*" to="/" />
-                                    </Switch>
-                                </Suspense>
-                            </Content>
+                
+                <Switch>
+                    {/* Auth pages - NO Layout wrapper, full screen */}
+                    <Route path="/account" render={(props) => (
+                        <Suspense fallback={<PageFallback />}>
+                            <Account {...props} />
+                        </Suspense>
+                    )} />
+
+                    {/* All other pages - WITH Layout wrapper */}
+                    <Route>
+                        <Layout style={{ minHeight: '100vh' }}>
+                            <Header style={{ position: 'sticky', top: 0, zIndex: 1, width: '100%' }}>
+                                <Row gutter={0}>
+                                    <Col className="gutter-row" flex="1 1 500px">
+                                        <div style={style}>
+                                            <Title style={{ padding: '15px 0px 0px 0px', color: 'white' }} level={3}> Website Quản lý Sinh viên Thực tập </Title>
+                                        </div>
+                                    </Col>
+                                    <Col style={{minWidth:"300px"}} span='auto'>
+                                        <div>
+                                            <div style={{color: 'white', fontSize: '14px', textAlign: 'right', marginRight:'20px'}}> 
+                                                <b>{ClassNameDisplay()}</b>
+                                            </div>
+                                        </div>
+                                    </Col>
+                                </Row>
+                            </Header> 
+                            <Layout>
+                                <Nav onLogout={userActions.logout} auth={authWrapper.tokenValue} userData={userData} classID={classWrapper.curClass ? (classWrapper.curClass._id || classWrapper.curClass.class_id) : ""}/>
+                                
+                                <Layout>
+                                    <Content style={{ margin: '20px 16px' }}>
+                                        <Suspense fallback={<PageFallback />}>
+                                            <Switch>
+                                                <PrivateRoute exact path="/" component={Home} />
+                                                <PrivateRoute path="/chat" component={Chat} />
+                                                <PrivateRoute path="/profile" component={Profile} />
+                                                <PrivateRoute exact path="/dbportal" component={DBPortal} />
+                                                <PrivateRoute exact path="/admin/students" component={AdminStudents} />
+                                                <PrivateRoute exact path="/internship" component={InternshipTabs} />
+                                                <PrivateRoute path="/:classID" component={Child} />
+                                                <Redirect from="*" to="/" />
+                                            </Switch>
+                                        </Suspense>
+                                    </Content>
+                                </Layout>
+                            </Layout> 
                         </Layout>
-                    </Layout> 
-                </Layout>
+                    </Route>
+                </Switch>
             
                 <ClassPicker drawerVisible={drawerVisible} setDrawerVisible={setDrawerVisible} onDrawerClose={onDrawerClose}/>
                 <Notification></Notification>

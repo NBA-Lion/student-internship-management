@@ -199,8 +199,32 @@ router.post("/users", authMiddleware, upload.single("file"), async (req, res) =>
           continue;
         }
 
-        // Determine role
-        const role = row.role || targetRole;
+        // ============================================
+        // SAFEGUARD: Determine role with strict validation
+        // NEVER allow 'admin' role from import
+        // ============================================
+        let role = row.role || targetRole;
+        
+        // CRITICAL: Prevent creating admin accounts via import
+        if (role === 'admin') {
+          console.warn(`>>> [Import] Blocked admin role assignment for: ${studentCode}`);
+          role = 'student'; // Force to student
+        }
+
+        // Auto-detect role based on student_code pattern
+        const codeUpper = String(studentCode).trim().toUpperCase();
+        if (codeUpper.startsWith('SV') || codeUpper.match(/^\d{8,}$/)) {
+          // Student code pattern: SV001, 20210001, etc.
+          role = 'student';
+        } else if (codeUpper.startsWith('GV') || codeUpper.startsWith('LEC')) {
+          // Lecturer code pattern: GV001, LEC001
+          role = 'lecturer';
+        }
+
+        // Only allow 'student' or 'lecturer' from import
+        if (!['student', 'lecturer'].includes(role)) {
+          role = 'student';
+        }
 
         // Prepare user data
         const userData = {
@@ -208,7 +232,7 @@ router.post("/users", authMiddleware, upload.single("file"), async (req, res) =>
           full_name: String(fullName).trim(),
           email: String(email).trim().toLowerCase(),
           password: row.password || defaultPassword,
-          role: role,
+          role: role, // Sanitized role
           phone: row.phone ? String(row.phone).trim() : undefined,
           gender: row.gender,
           dob: parseDate(row.dob),

@@ -3,6 +3,8 @@ import { useRecoilState } from 'recoil';
 import { useFetchWrapper } from '_helpers';
 import { useProfileAction } from '_actions'; // Đã bỏ useAlertActions thừa
 import { alertBachAtom } from '_state';
+import { socketWrapper } from '_helpers/socket-wrapper';
+import { clearNotificationQueue } from '_actions/socket.action';
 
 export { useAuthWrapper };
 
@@ -81,8 +83,24 @@ function useAuthWrapper() {
     // --- 2. HÀM ĐĂNG XUẤT ---
     async function logout() {
         console.log(">>> [Auth] Đang đăng xuất...");
+        
+        // 1. Clear notification queue first
+        clearNotificationQueue();
+        
+        // 2. Disconnect socket to prevent receiving messages for old user
+        if (socketWrapper.socket) {
+            console.log(">>> [Auth] Disconnecting socket...");
+            socketWrapper.socket.disconnect();
+            socketWrapper.socket = null;
+            socketWrapper.isConnected = false;
+        }
+        
+        // 3. Clear token and storage
         setLoginToken("");
         localStorage.clear();
+        sessionStorage.clear();
+        
+        console.log(">>> [Auth] Đăng xuất hoàn tất.");
     }
 
     // --- 3. LƯU TOKEN ---

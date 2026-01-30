@@ -1,79 +1,124 @@
-import React, {useEffect, useRef, useState} from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Compose from '../Compose';
 import Toolbar from '../Toolbar';
-import ToolbarButton from '../ToolbarButton';
 import Message from '../Message';
 import moment from 'moment';
 import useChatAction from '_actions/chat.action';
 import useChatWrapper from '_helpers/chat-wrapper';
-import {useParams} from 'react-router-dom';
-import { useAuthWrapper } from '_helpers';
+import { useParams } from 'react-router-dom';
+import { useRecoilValue } from 'recoil';
+import { authAtom } from '_state';
 import './MessageList.css';
 import axios from 'axios';
+
 export default function MessageList(props) {
-  let {vnu_id} = useParams();
+  const { vnu_id } = useParams();
   const [fetchDone, setFetchDone] = useState(false);
   const [isHidden, setIsHidden] = useState(true);
+  const [targetName, setTargetName] = useState('');
+  
   const messageEnd = useRef(null);
+  const messageListRef = useRef(null);
+  
   const chatAction = useChatAction();
   const chatWrapper = useChatWrapper();
-  const NOT_MY_USER_ID = vnu_id
-  let [targetName, setTargetName] = useState('');
+  const auth = useRecoilValue(authAtom);
+  
+  const currentUserId = auth?.student_code || auth?.vnu_id;
+  const NOT_MY_USER_ID = vnu_id;
+
+  // ============================================
+  // LOAD CONVERSATION WHEN vnu_id CHANGES
+  // ============================================
   useEffect(() => {
+    if (!vnu_id) return;
 
     setIsHidden(true);
-    if (vnu_id)
-    chatAction.addContactToList({vnu_id : vnu_id}).then(() => {
-      chatAction.getCurChatMessageById(vnu_id).then(res => {
+    setFetchDone(false);
+
+    // Set active conversation FIRST
+    chatWrapper.setCurChatPerson(vnu_id);
+    
+    // Clear unread count when opening conversation
+    chatWrapper.clearUnreadCount(vnu_id);
+
+    // Add contact and load messages
+    chatAction.addContactToList({ vnu_id }).then(() => {
+      chatAction.getCurChatMessageById(vnu_id).then(() => {
         setFetchDone(true);
         setIsHidden(false);
       });
-    })
-    
-    async function getTargetName(vnu_id) {
-      // debugger
-      if (vnu_id) {
-        let res = await axios.get('http://localhost:5000/api/profile/' + vnu_id)
-        res = res.data;
-        // debugger
-        setTargetName(res.name);
+    });
+
+    // Fetch target user name
+    async function getTargetName() {
+      try {
+        const res = await axios.get('http://localhost:5000/api/profile/' + vnu_id);
+        setTargetName(res.data?.name || res.data?.full_name || "Người dùng");
+      } catch (e) {
+        console.error("Error fetching target name:", e);
+        setTargetName("Người dùng");
+      }
     }
-    }
-    getTargetName(vnu_id)
-  },[vnu_id])
-  useEffect(() => {
-    
+    getTargetName();
+
+    // Cleanup: clear active conversation on unmount
     return () => {
       chatWrapper.setCurChatPerson(null);
-    }
-  }, [])
-  let messages = [];
-
-  if (fetchDone)
-    messages = chatWrapper.curListMessages &&  chatWrapper.curListMessages.length > 0 ? chatWrapper.curListMessages.map(result => {
-    
-    return {
-      id: result._id,
-      author: result.from.vnu_id,
-      message: result.message,
-      timestamp: new Date(result.createdDate)
     };
-  }) : []; 
- 
+  }, [vnu_id]);
+
+  // ============================================
+  // FILTER MESSAGES FOR CURRENT CONVERSATION ONLY
+  // Prevent "ghost messages" from other users
+  // ============================================
+  const filteredMessages = React.useMemo(() => {
+    if (!fetchDone || !chatWrapper.curListMessages) return [];
+    
+    return chatWrapper.curListMessages.filter(msg => {
+      const senderId = msg.from?.vnu_id || msg.sender;
+      const receiverId = msg.to?.vnu_id || msg.receiver;
+      
+      // Message must be between current user and the target user
+      const isRelevant = 
+        (senderId === currentUserId && receiverId === vnu_id) ||
+        (senderId === vnu_id && receiverId === currentUserId);
+      
+      return isRelevant;
+    }).map(result => ({
+      id: result._id,
+      author: result.from?.vnu_id || result.sender,
+      message: result.message || result.content,
+      timestamp: new Date(result.createdDate || result.createdAt || result.timestamp)
+    }));
+  }, [chatWrapper.curListMessages, fetchDone, currentUserId, vnu_id]);
+
+  // ============================================
+  // AUTO-SCROLL TO BOTTOM ON NEW MESSAGES
+  // ============================================
+  const scrollToBottom = useCallback(() => {
+    if (messageEnd.current) {
+      messageEnd.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, []);
+
   useEffect(() => {
-    messageEnd.current.scrollIntoView()
-  }, [chatWrapper.curListMessages])
+    scrollToBottom();
+  }, [filteredMessages.length, scrollToBottom]);
+  // ============================================
+  // RENDER MESSAGES WITH PROPER GROUPING
+  // ============================================
   const renderMessages = () => {
-    let i = 0;
-    let messageCount = messages.length;
+    const messages = filteredMessages;
     let tempMessages = [];
     
-    while (i < messageCount) {
-      let previous = messages[i - 1];
-      let current = messages[i];
-      let next = messages[i + 1];
-      let isMine = current.author !== NOT_MY_USER_ID;
-      let currentMoment = moment(current.timestamp);
+    for (let i = 0; i < messages.length; i++) {
+      const previous = messages[i - 1];
+      const current = messages[i];
+      const next = messages[i + 1];
+      const isMine = current.author !== NOT_MY_USER_ID;
+      const currentMoment = moment(current.timestamp);
+      
       let prevBySameAuthor = false;
       let nextBySameAuthor = false;
       let startsSequence = true;
@@ -81,23 +126,21 @@ export default function MessageList(props) {
       let showTimestamp = true;
 
       if (previous) {
-        let previousMoment = moment(previous.timestamp);
-        let previousDuration = moment.duration(currentMoment.diff(previousMoment));
-       
+        const previousMoment = moment(previous.timestamp);
+        const previousDuration = moment.duration(currentMoment.diff(previousMoment));
         prevBySameAuthor = previous.author === current.author;
         
         if (prevBySameAuthor && previousDuration.as('hours') < 1) {
           startsSequence = false;
         }
-
         if (previousDuration.as('hours') < 1) {
           showTimestamp = false;
         }
       }
 
       if (next) {
-        let nextMoment = moment(next.timestamp);
-        let nextDuration = moment.duration(nextMoment.diff(currentMoment));
+        const nextMoment = moment(next.timestamp);
+        const nextDuration = moment.duration(nextMoment.diff(currentMoment));
         nextBySameAuthor = next.author === current.author;
 
         if (nextBySameAuthor && nextDuration.as('hours') < 1) {
@@ -107,7 +150,7 @@ export default function MessageList(props) {
 
       tempMessages.push(
         <Message
-          key={i}
+          key={current.id || i}
           isMine={isMine}
           startsSequence={startsSequence}
           endsSequence={endsSequence}
@@ -115,13 +158,10 @@ export default function MessageList(props) {
           data={current}
         />
       );
-
-      // Proceed to the next message.
-      i += 1;
     }
 
     return tempMessages;
-  }
+  };
 
     return(
       <div className="message-list">

@@ -1,22 +1,53 @@
 import React, {useEffect} from 'react';
 import Avatar from '@mui/material/Avatar';
+import Badge from '@mui/material/Badge';
 import './ConversationListItem.css';
 import shave from 'shave';
+
 export default function ConversationListItem(props) {
   useEffect(() => {
-	  console.log("rerender item")
-	shave(".conversation-snippet", 20)
+    shave(".conversation-snippet", 20)
   }, [])
-    const {name, text } = props.data;
-    return (
-      <div className={"conversation-list-item" + (props.picked ? " picked" : "")}>
-         <Avatar {...stringAvatar(name)}  className="conversation-photo" />
-        <div className="conversation-info">
-          <h1 className="conversation-title">{ name }</h1>
-          <span className="conversation-snippet">{ truncateString(text,20) }</span>
-        </div>
+  
+  const { name, text } = props.data;
+  const unreadCount = props.unreadCount || 0;
+  
+  return (
+    <div className={"conversation-list-item" + (props.picked ? " picked" : "")}>
+      <Badge 
+        badgeContent={unreadCount} 
+        color="error" 
+        invisible={unreadCount === 0}
+        overlap="circular"
+        anchorOrigin={{
+          vertical: 'top',
+          horizontal: 'right',
+        }}
+      >
+        <Avatar {...stringAvatar(name)} className="conversation-photo" />
+      </Badge>
+      <div className="conversation-info">
+        <h1 className="conversation-title">
+          {name}
+          {unreadCount > 0 && (
+            <span className="unread-indicator" style={{
+              display: 'inline-block',
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              backgroundColor: '#f5222d',
+              marginLeft: 8
+            }} />
+          )}
+        </h1>
+        <span className="conversation-snippet" style={{
+          fontWeight: unreadCount > 0 ? 'bold' : 'normal'
+        }}>
+          {truncateString(text, 20)}
+        </span>
       </div>
-    );
+    </div>
+  );
 }
 
 function stringToColor(string) {

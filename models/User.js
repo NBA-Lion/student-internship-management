@@ -2,26 +2,28 @@ const mongoose = require("mongoose");
 
 const UserSchema = new mongoose.Schema(
   {
-    // === THÔNG TIN CƠ BẢN ===
+    // === THÔNG TIN CƠ BẢN (BẮT BUỘC) ===
     student_code: { type: String, required: true, unique: true },
     full_name: { type: String, required: true },
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
+    
+    // === THÔNG TIN CƠ BẢN (TÙY CHỌN) ===
     role: { 
       type: String, 
       enum: ["admin", "student", "lecturer"], 
       default: "student" 
     },
-    phone: { type: String },
-    dob: { type: Date },
-    gender: { type: String },
+    phone: { type: String, default: null },           // Optional - có thể bổ sung sau
+    dob: { type: Date, default: null },               // Optional - có thể bổ sung sau
+    gender: { type: String, default: null },
 
     // === THÔNG TIN HỌC VẤN / GIẢNG VIÊN ===
-    university: { type: String },
-    faculty: { type: String },           // Khoa (cho cả SV và GV)
-    department: { type: String },        // Khoa/Viện (dành cho Lecturer)
-    major: { type: String },
-    class_name: { type: String },        // Lớp sinh hoạt (Student only)
+    university: { type: String, default: "Trung tâm CNTT" },  // Default cho IT Center
+    faculty: { type: String, default: null },         // Optional - Khoa
+    department: { type: String, default: null },      // Optional - Khoa/Viện (Lecturer)
+    major: { type: String, default: null },           // Optional - Ngành
+    class_name: { type: String, default: null },      // Optional - Lớp sinh hoạt
 
     // === THÔNG TIN THỰC TẬP ===
     internship_unit: { type: String },        // Đơn vị thực tập
