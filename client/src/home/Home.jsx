@@ -1,9 +1,9 @@
 import { Link } from 'react-router-dom';
-import { useRecoilState } from 'recoil';
+import { useRecoilValue } from 'recoil';
 import { useEffect, useState } from 'react';
 import {
     Card, Row, Col, Tag, Spin, Button, Divider, Avatar, Statistic, 
-    Progress, Tabs, Timeline, Descriptions, Input, message, Steps, Breadcrumb
+    Progress, Tabs, Timeline, Descriptions, Steps, Breadcrumb
 } from 'antd';
 import {
     UserOutlined,
@@ -187,7 +187,7 @@ const tabStyles = `
 // ==================== MAIN COMPONENT ====================
 
 function Home() {
-    const [profile, setProfile] = useRecoilState(profileAtom);
+    const profile = useRecoilValue(profileAtom);
     const [loading, setLoading] = useState(true);
     const [adminStats, setAdminStats] = useState({ pending: 0, total: 0, interning: 0, completed: 0 });
     const [recentActivities, setRecentActivities] = useState([]);
@@ -237,6 +237,7 @@ function Home() {
             setLoading(false);
         }
         loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // Inject custom styles
