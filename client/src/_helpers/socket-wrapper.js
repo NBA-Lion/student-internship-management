@@ -1,5 +1,7 @@
 import { io } from "socket.io-client";
 
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
+
 class socketWrapper {
     // Đã xóa constructor thừa
 
@@ -15,7 +17,7 @@ class socketWrapper {
         
         if (!socketWrapper.initiated) {
             // Kết nối tới Backend mới (port 5000)
-            socketWrapper.socket = io("http://localhost:5000", {
+            socketWrapper.socket = io(BACKEND_URL, {
                 reconnectionDelayMax: 10000,
                 auth: {
                     token: token

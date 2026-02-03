@@ -2,6 +2,7 @@ import React from 'react';
 import { useHistory } from 'react-router-dom';
 import { UploadForm } from './UploadForm';
 import { Row, Col, Breadcrumb } from 'antd';
+import { API_BASE } from '_helpers/Constant';
 
 export { DBPortal };
 export default DBPortal;
@@ -217,7 +218,7 @@ function DBPortal() {
             </p>
             <UploadForm 
               columns={upload_form_lecturer} 
-              formurl="http://localhost:5000/api/import/users?role=lecturer"
+              formurl={`${API_BASE}/api/import/users?role=lecturer`}
               templateType="lecturer"
             />
           </div>
@@ -230,7 +231,7 @@ function DBPortal() {
             </p>
             <UploadForm 
               columns={upload_form_student} 
-              formurl="http://localhost:5000/api/import/users?role=student"
+              formurl={`${API_BASE}/api/import/users?role=student`}
               templateType="student"
             />
             <p style={{ color: '#f5222d', fontSize: 12, marginTop: 8 }}>
@@ -246,7 +247,7 @@ function DBPortal() {
             </p>
             <UploadForm 
               columns={upload_form_company} 
-              formurl="http://localhost:5000/api/import/companies"
+              formurl={`${API_BASE}/api/import/companies`}
               templateType="company"
             />
           </div>
@@ -266,7 +267,7 @@ function DBPortal() {
             </p>
             <UploadForm 
               columns={upload_form_internship_batch} 
-              formurl="http://localhost:5000/api/import/batches"
+              formurl={`${API_BASE}/api/import/batches`}
               templateType="batch"
             />
           </div>
@@ -279,7 +280,7 @@ function DBPortal() {
             </p>
             <UploadForm 
               columns={upload_form_internship_result} 
-              formurl="http://localhost:5000/api/import/grades"
+              formurl={`${API_BASE}/api/import/grades`}
               templateType="result"
             />
           </div>
@@ -292,7 +293,7 @@ function DBPortal() {
             </p>
             <UploadForm 
               columns={upload_form_status} 
-              formurl="http://localhost:5000/api/import/status"
+              formurl={`${API_BASE}/api/import/status`}
               templateType="status"
             />
           </div>

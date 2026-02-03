@@ -17,6 +17,7 @@ import moment from 'moment';
 import { authAtom, profileAtom } from '_state';
 import { useFetchWrapper } from '_helpers';
 import { useProfileAction } from '_actions';
+import { API_BASE } from '_helpers/Constant';
 
 import locale from 'antd/es/date-picker/locale/vi_VN';
 
@@ -25,7 +26,6 @@ const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
 
 const DATE_FORMAT = 'DD/MM/YYYY';
-const API_BASE = 'http://localhost:5000';
 
 // ============================================
 // STYLES

@@ -30,4 +30,6 @@ const API_PATH = {
     LIKE_POST: "/api/classes/:classId/feed/:postId/likes/toogle",
 };
 const HOST_NAME = "http://localhost:3000";
-export {API_PATH, HOST_NAME};
+// Deploy: set REACT_APP_BACKEND_URL = https://your-backend.onrender.com trên Vercel
+const API_BASE = process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
+export { API_PATH, HOST_NAME, API_BASE };

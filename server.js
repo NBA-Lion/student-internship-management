@@ -20,9 +20,17 @@ const activityRoutes = require("./routes/activity");
 const app = express();
 const server = http.createServer(app);
 
+// Cho phép frontend local + Vercel (deploy); FRONTEND_URL = https://xxx.vercel.app
+const corsOrigins = [
+  "http://localhost:3000",
+  "http://localhost:3001",
+  "http://127.0.0.1:3000",
+  ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : [])
+];
+
 const io = new Server(server, {
   cors: {
-    origin: ["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000"],
+    origin: corsOrigins,
     methods: ["GET", "POST"],
     credentials: true
   }
@@ -31,7 +39,7 @@ const io = new Server(server, {
 app.set("io", io);
 
 app.use(cors({
-  origin: ["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000"],
+  origin: corsOrigins,
   credentials: true
 }));
 app.use(express.json());
