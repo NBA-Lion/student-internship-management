@@ -15,6 +15,7 @@ const adminRoutes = require("./routes/admin");
 const periodRoutes = require("./routes/period");
 const chatRoutes = require("./routes/chat");
 const importRoutes = require("./routes/import");
+const activityRoutes = require("./routes/activity");
 
 const app = express();
 const server = http.createServer(app);
@@ -45,6 +46,7 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/periods", periodRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/import", importRoutes);
+app.use("/api/activities", activityRoutes);
 
 // Legacy profile
 app.get("/api/profile/:id", authMiddleware, async (req, res) => {

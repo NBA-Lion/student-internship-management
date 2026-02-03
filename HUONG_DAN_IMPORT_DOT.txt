@@ -1,0 +1,33 @@
+================================================================================
+  HƯỚNG DẪN IMPORT – TRÁNH LỖI "THIẾU MÃ ĐỢT"
+================================================================================
+
+Có 2 loại import khác nhau – dùng đúng file cho đúng mục:
+
+---------- 1. DANH SÁCH ĐỢT THỰC TẬP (tạo các đợt: Hè 2025, Đông 2025...) ----------
+  • Vào /dbportal → chọn "Danh sách Đợt thực tập"
+  • File BẮT BUỘC có 4 cột: Mã đợt, Tên đợt, Ngày bắt đầu, Ngày kết thúc
+  • Dùng file: danh_sach_dot_thuc_tap_mau.csv
+  • Ví dụ nội dung:
+      Mã đợt,Tên đợt,Ngày bắt đầu,Ngày kết thúc
+      2025-HE,Đợt Hè 2025,01/06/2025,31/08/2025
+
+  ⚠ Nếu dùng file có cột "Mã sinh viên" (file gán đợt cho SV) → sẽ báo "Thiếu mã đợt"
+     vì mục này cần Mã đợt + Tên đợt + Ngày, KHÔNG phải Mã sinh viên.
+
+
+---------- 2. IMPORT KẾT QUẢ THỰC TẬP (gán đợt cho từng sinh viên) ----------
+  • Vào /dbportal → chọn "Import Kết quả thực tập"
+  • File có cột: Mã sinh viên, Mã đợt, Điểm thực tập, Nhận xét
+  • Dùng file: gan_dot_cho_tat_ca_sinh_vien.csv
+  • Sau khi import, cột "Đợt thực tập" ở trang Quản lý SV mới có tên đợt.
+
+  ⚠ File này KHÔNG dùng cho "Danh sách Đợt thực tập".
+
+
+---------- TÓM TẮT ----------
+  • Lỗi "Thiếu mã đợt" = đang import vào "Danh sách Đợt thực tập" nhưng file
+    thiếu cột Mã đợt hoặc dùng nhầm file (file gán đợt cho SV).
+  • Tạo đợt: dùng danh_sach_dot_thuc_tap_mau.csv → Danh sách Đợt thực tập.
+  • Gán đợt cho SV: dùng gan_dot_cho_tat_ca_sinh_vien.csv → Import Kết quả thực tập.
+================================================================================

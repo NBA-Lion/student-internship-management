@@ -2,9 +2,8 @@ import { atom } from 'recoil';
 
 const authAtom = atom({
     key: 'token',
-    // get initial state from local storage to enable user to stay logged in
-    default: getCookie("token")
-    // default: null
+    // Cookie ưu tiên; fallback localStorage để đảm bảo token có khi gọi API (export, blob...)
+    default: (typeof window !== 'undefined' && (getCookie("token") || localStorage.getItem("token"))) || ""
 });
 
 function getCookie(cname) {

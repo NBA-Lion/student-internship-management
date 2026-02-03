@@ -1,9 +1,9 @@
 import { Link } from 'react-router-dom';
 import { useRecoilState } from 'recoil';
 import { useEffect, useState } from 'react';
-import { 
+import {
     Card, Row, Col, Tag, Spin, Button, Divider, Avatar, Statistic, 
-    Progress, Tabs, Timeline, Descriptions, Input, message, Steps
+    Progress, Tabs, Timeline, Descriptions, Input, message, Steps, Breadcrumb
 } from 'antd';
 import {
     UserOutlined,
@@ -31,7 +31,8 @@ import {
     LinkOutlined,
     FilePdfOutlined,
     CheckOutlined,
-    LoadingOutlined
+    LoadingOutlined,
+    SyncOutlined
 } from '@ant-design/icons';
 import { useUserActions, useProfileAction } from '_actions';
 import { profileAtom } from '_state';
@@ -82,6 +83,44 @@ function getFinalStatusInfo(finalStatus) {
             return { color: "#ff4d4f", text: "KHÔNG ĐẠT", icon: <ExclamationCircleOutlined /> };
         default:
             return { color: "#faad14", text: "Đang chờ", icon: <ClockCircleOutlined /> };
+    }
+}
+
+/** Format thời gian tương đối cho hoạt động (vd: "5 phút trước", "Hôm nay, 10:30") */
+function formatTimeAgo(dateString) {
+    if (!dateString) return "Vừa xong";
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    if (diffMins < 1) return "Vừa xong";
+    if (diffMins < 60) return `${diffMins} phút trước`;
+    if (diffHours < 24 && date.getDate() === now.getDate()) {
+        return `Hôm nay, ${date.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}`;
+    }
+    if (diffDays === 1) return "Hôm qua";
+    if (diffDays < 7) return `${diffDays} ngày trước`;
+    return date.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+/** Map loại hoạt động -> icon + màu nền (dùng cho Hoạt động gần đây) */
+function getActivityStyle(type) {
+    switch (type) {
+        case "profile_update":
+        case "registration":
+            return { icon: <UserOutlined />, iconBg: "#e6f7ff" };
+        case "report_submit":
+            return { icon: <FileTextOutlined />, iconBg: "#f6ffed" };
+        case "evaluation":
+        case "approval":
+            return { icon: <CheckCircleOutlined />, iconBg: "#e6fffb" };
+        case "import":
+        case "system":
+            return { icon: <SyncOutlined />, iconBg: "#f5f5f5" };
+        default:
+            return { icon: <HistoryOutlined />, iconBg: "#f9f0ff" };
     }
 }
 
@@ -151,6 +190,8 @@ function Home() {
     const [profile, setProfile] = useRecoilState(profileAtom);
     const [loading, setLoading] = useState(true);
     const [adminStats, setAdminStats] = useState({ pending: 0, total: 0, interning: 0, completed: 0 });
+    const [recentActivities, setRecentActivities] = useState([]);
+    const [activitiesLoading, setActivitiesLoading] = useState(false);
     const [activeTab, setActiveTab] = useState("1");
     const profileAction = useProfileAction();
     const userActions = useUserActions();
@@ -163,7 +204,7 @@ function Home() {
             try {
                 await profileAction.getMyProfile();
                 
-                // Nếu là admin, load thêm thống kê
+                // Nếu là admin, load thêm thống kê và hoạt động gần đây
                 if (userData.role === "admin") {
                     try {
                         const response = await fetchWrapper.get("/api/admin/stats");
@@ -176,6 +217,19 @@ function Home() {
                     } catch (e) {
                         console.log("Không thể tải thống kê admin");
                     }
+                    setActivitiesLoading(true);
+                    try {
+                        const actRes = await fetchWrapper.get("/api/activities/recent?limit=20");
+                        if (actRes && actRes.ok) {
+                            const actData = await actRes.json();
+                            if (actData.status === "Success" && Array.isArray(actData.data)) {
+                                setRecentActivities(actData.data);
+                            }
+                        }
+                    } catch (e) {
+                        console.log("Không thể tải hoạt động gần đây");
+                    }
+                    setActivitiesLoading(false);
                 }
             } catch (e) {
                 console.error("Lỗi tải dữ liệu:", e);
@@ -207,12 +261,15 @@ function Home() {
     // ==================== ADMIN DASHBOARD ====================
     if (userData.role === "admin") {
         return (
-            <div className="p-4">
+            <div className="p-4" style={{ paddingTop: 24 }}>
                 <div className="container">
-                    <h2 style={{ marginBottom: 8 }}>
+                    <Breadcrumb style={{ marginBottom: 16, fontSize: 13, color: '#8c8c8c' }}>
+                        <Breadcrumb.Item>Trang chủ</Breadcrumb.Item>
+                    </Breadcrumb>
+                    <h2 style={{ marginBottom: 8, fontSize: 20 }}>
                         <AuditOutlined /> Bảng điều khiển Giáo vụ
                     </h2>
-                    <p style={{ color: '#666' }}>Quản lý và theo dõi sinh viên thực tập</p>
+                    <p style={{ color: '#666', fontSize: 13, marginBottom: 16 }}>Quản lý và theo dõi sinh viên thực tập</p>
                     <Divider />
 
                     {/* Admin Stats Cards with Deep Linking */}
@@ -303,32 +360,56 @@ function Home() {
 
                     <Divider />
 
-                    {/* Quick Actions */}
-                    <h4>Thao tác nhanh</h4>
-                    <Row gutter={[16, 16]}>
-                        <Col xs={24} sm={8}>
-                            <Link to="/admin/students">
-                                <Card hoverable style={{ textAlign: 'center' }}>
-                                    <SolutionOutlined style={{ fontSize: 40, color: '#1890ff' }} />
-                                    <h4 style={{ marginTop: 12 }}>Quản lý sinh viên</h4>
-                                </Card>
-                            </Link>
-                        </Col>
-                        <Col xs={24} sm={8}>
-                            <Link to="/profile">
-                                <Card hoverable style={{ textAlign: 'center' }}>
-                                    <UserOutlined style={{ fontSize: 40, color: '#52c41a' }} />
-                                    <h4 style={{ marginTop: 12 }}>Hồ sơ cá nhân</h4>
-                                </Card>
-                            </Link>
-                        </Col>
-                        <Col xs={24} sm={8}>
-                            <Card hoverable style={{ textAlign: 'center' }} onClick={userActions.logout}>
-                                <LogoutOutlined style={{ fontSize: 40, color: '#ff4d4f' }} />
-                                <h4 style={{ marginTop: 12 }}>Đăng xuất</h4>
-                            </Card>
-                        </Col>
-                    </Row>
+                    {/* Recent Activities - dữ liệu thật từ API */}
+                    <h4 style={{ marginBottom: 16 }}><HistoryOutlined /> Hoạt động gần đây</h4>
+                    <Card style={{ background: '#fff', borderRadius: 12, boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }} bodyStyle={{ padding: 0 }}>
+                        {activitiesLoading ? (
+                            <div style={{ padding: 32, textAlign: 'center' }}>
+                                <Spin tip="Đang tải hoạt động..." />
+                            </div>
+                        ) : recentActivities.length === 0 ? (
+                            <div style={{ padding: 32, textAlign: 'center', color: '#8c8c8c' }}>
+                                Chưa có hoạt động nào gần đây.
+                            </div>
+                        ) : (
+                            recentActivities.map((item, idx) => {
+                                const style = getActivityStyle(item.type);
+                                return (
+                                    <div
+                                        key={item._id || idx}
+                                        style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            padding: '14px 20px',
+                                            borderBottom: idx < recentActivities.length - 1 ? '1px solid #f0f0f0' : 'none',
+                                            gap: 14,
+                                        }}
+                                    >
+                                        <Avatar
+                                            size={40}
+                                            icon={style.icon}
+                                            style={{ backgroundColor: style.iconBg, color: '#1890ff', flexShrink: 0 }}
+                                        />
+                                        <div style={{ flex: 1, fontSize: 14, color: '#262626', lineHeight: 1.5 }}>
+                                            {item.actor_name && item.title.includes(item.actor_name) ? (
+                                                <>
+                                                    {item.title.split(item.actor_name)[0]}
+                                                    <strong>{item.actor_name}</strong>
+                                                    {item.title.split(item.actor_name)[1]}
+                                                </>
+                                            ) : (
+                                                item.title
+                                            )}
+                                            {item.description && (
+                                                <div style={{ fontSize: 12, color: '#8c8c8c', marginTop: 2 }}>{item.description}</div>
+                                            )}
+                                        </div>
+                                        <span style={{ fontSize: 12, color: '#8c8c8c', flexShrink: 0 }}>{formatTimeAgo(item.createdAt)}</span>
+                                    </div>
+                                );
+                            })
+                        )}
+                    </Card>
                 </div>
             </div>
         );
@@ -348,11 +429,14 @@ function Home() {
     };
 
     return (
-        <div className="p-4">
+        <div className="p-4" style={{ paddingTop: 24 }}>
             <div className="container">
+                <Breadcrumb style={{ marginBottom: 16, fontSize: 13, color: '#8c8c8c' }}>
+                    <Breadcrumb.Item>Trang chủ</Breadcrumb.Item>
+                </Breadcrumb>
                 {/* Header với Status Badge */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                    <h2 style={{ margin: 0 }}>
+                    <h2 style={{ margin: 0, fontSize: 20 }}>
                         <SolutionOutlined /> Bảng theo dõi thực tập
                     </h2>
                     <Tag 

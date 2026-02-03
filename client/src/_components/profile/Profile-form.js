@@ -109,6 +109,27 @@ const getInternStatusDisplay = (status) => {
     }
 };
 
+/** Map dữ liệu profile sang giá trị form (để form không bắt nhập lại khi đã có sẵn) */
+const getFormValuesFromData = (data, isAdmin) => {
+    if (!data) return {};
+    const values = {
+        name: data.name || data.full_name || '',
+        email: data.email,
+        phone_number: data.phone_number || data.phone || undefined,
+    };
+    if (isAdmin) return values;
+    return {
+        ...values,
+        student_code: data.student_code || data.vnu_id,
+        date_of_birth: formatTimestampToMoment(data.date_of_birth),
+        parent_number: data.parent_number || undefined,
+        address: data.address || undefined,
+        class_name: data.class_name || data.class || undefined,
+        faculty: data.faculty || undefined,
+        major: data.major || undefined,
+    };
+};
+
 // ============================================
 // MAIN COMPONENT
 // ============================================
@@ -128,9 +149,9 @@ function ProfileForm(props) {
     const data = props.data || localData;
     const isTable = props.isTable;
     
-    // Determine user role (safe check)
-    const userRole = data?.role || userData?.role || 'student';
-    const isAdmin = userRole === 'admin' || userRole === 'mentor' || userRole === 'teacher';
+    // Determine user role (safe check, không phân biệt hoa thường)
+    const userRole = (data?.role || userData?.role || 'student').toString().toLowerCase();
+    const isAdmin = ['admin', 'mentor', 'teacher'].includes(userRole);
     const isStudent = userRole === 'student';
 
     // ============================================
@@ -146,7 +167,9 @@ function ProfileForm(props) {
 
     useEffect(() => {
         if (data) {
-            form.resetFields();
+            const isAdminRole = data.role === 'admin' || data.role === 'mentor' || data.role === 'teacher';
+            const initialValues = getFormValuesFromData(data, isAdminRole);
+            form.setFieldsValue(initialValues);
         }
     }, [data, form]);
 
@@ -243,9 +266,9 @@ function ProfileForm(props) {
                 }
                 
                 // Academic info (editable by student)
-                if (values.faculty) updateData.faculty = values.faculty;
-                if (values.major) updateData.major = values.major;
-                if (values.class_name) updateData.class_name = values.class_name;
+                updateData.faculty = values.faculty ?? '';
+                updateData.major = values.major ?? '';
+                updateData.class_name = values.class_name ?? '';
                 
                 // Password fields (if changing)
                 if (passwordSwitch && values.old_password && values.new_password) {
@@ -261,6 +284,12 @@ function ProfileForm(props) {
             
             // Remove empty/undefined values
             updateData = pickBy(updateData, identity);
+            // Sinh viên: luôn gửi Lớp/Khoa/Ngành (kể cả rỗng) để sửa/xóa giá trị sai trong DB
+            if (isStudent) {
+                updateData.class_name = values.class_name ?? '';
+                updateData.faculty = values.faculty ?? '';
+                updateData.major = values.major ?? '';
+            }
             
             // Submit
             const userId = data?.student_code || data?.vnu_id || 'me';
@@ -269,7 +298,12 @@ function ProfileForm(props) {
             setPasswordSwitch(false);
         } catch (e) {
             console.error('Submit error:', e);
-            setAlert({ message: "Lỗi", description: e?.message || String(e) });
+            let errMsg = 'Có lỗi xảy ra';
+            if (typeof e?.message === 'string') errMsg = e.message;
+            else if (e?.errorFields?.length && e.errorFields[0]?.errors?.length) errMsg = e.errorFields[0].errors[0];
+            else if (e?.response?.data?.message || e?.data?.message) errMsg = e.response?.data?.message || e.data?.message;
+            else if (typeof e === 'string') errMsg = e;
+            setAlert({ message: "Lỗi", description: errMsg });
         } finally {
             setSubmitButtonLoading(false);
         }
@@ -431,7 +465,7 @@ function ProfileForm(props) {
                                             <Form.Item 
                                                 label="Mật khẩu cũ" 
                                                 name="old_password"
-                                                rules={[{ required: passwordSwitch, message: 'Vui lòng nhập mật khẩu cũ' }]}
+                                                rules={[{ required: true, message: 'Vui lòng nhập mật khẩu cũ' }]}
                                             >
                                                 <Input.Password placeholder="Nhập mật khẩu hiện tại" />
                                             </Form.Item>
@@ -441,11 +475,29 @@ function ProfileForm(props) {
                                                 label="Mật khẩu mới" 
                                                 name="new_password"
                                                 rules={[
-                                                    { required: passwordSwitch, message: 'Vui lòng nhập mật khẩu mới' },
+                                                    { required: true, message: 'Vui lòng nhập mật khẩu mới' },
                                                     { min: 6, message: 'Mật khẩu tối thiểu 6 ký tự' }
                                                 ]}
                                             >
                                                 <Input.Password placeholder="Nhập mật khẩu mới" />
+                                            </Form.Item>
+                                        </Col>
+                                        <Col xs={24} md={12}>
+                                            <Form.Item 
+                                                label="Xác nhận mật khẩu mới" 
+                                                name="confirm_new_password"
+                                                dependencies={['new_password']}
+                                                rules={[
+                                                    { required: true, message: 'Vui lòng xác nhận mật khẩu mới' },
+                                                    ({ getFieldValue }) => ({
+                                                        validator(_, value) {
+                                                            if (!value || getFieldValue('new_password') === value) return Promise.resolve();
+                                                            return Promise.reject(new Error('Mật khẩu xác nhận không khớp'));
+                                                        }
+                                                    })
+                                                ]}
+                                            >
+                                                <Input.Password placeholder="Nhập lại mật khẩu mới" />
                                             </Form.Item>
                                         </Col>
                                     </Row>
@@ -613,6 +665,16 @@ function ProfileForm(props) {
                                         </Form.Item>
                                     </Col>
                                     <Col xs={24} md={12}>
+                                        <Form.Item label="Đợt thực tập">
+                                            <Input
+                                                prefix={<CalendarOutlined style={{ color: '#bfbfbf' }} />}
+                                                value={data.internship_period || 'Chưa xác định'}
+                                                disabled
+                                                style={{ backgroundColor: '#fafafa' }}
+                                            />
+                                        </Form.Item>
+                                    </Col>
+                                    <Col xs={24} md={12}>
                                         <Form.Item label="Trạng thái">
                                             <div>
                                                 <Tag color={getInternStatusDisplay(data.internship_status).color}>
@@ -725,7 +787,7 @@ function ProfileForm(props) {
                                             <Form.Item 
                                                 label="Mật khẩu cũ" 
                                                 name="old_password"
-                                                rules={[{ required: passwordSwitch, message: 'Vui lòng nhập mật khẩu cũ' }]}
+                                                rules={[{ required: true, message: 'Vui lòng nhập mật khẩu cũ' }]}
                                             >
                                                 <Input.Password placeholder="Nhập mật khẩu hiện tại" />
                                             </Form.Item>
@@ -735,11 +797,29 @@ function ProfileForm(props) {
                                                 label="Mật khẩu mới" 
                                                 name="new_password"
                                                 rules={[
-                                                    { required: passwordSwitch, message: 'Vui lòng nhập mật khẩu mới' },
+                                                    { required: true, message: 'Vui lòng nhập mật khẩu mới' },
                                                     { min: 6, message: 'Mật khẩu tối thiểu 6 ký tự' }
                                                 ]}
                                             >
                                                 <Input.Password placeholder="Nhập mật khẩu mới" />
+                                            </Form.Item>
+                                        </Col>
+                                        <Col xs={24} md={12}>
+                                            <Form.Item 
+                                                label="Xác nhận mật khẩu mới" 
+                                                name="confirm_new_password"
+                                                dependencies={['new_password']}
+                                                rules={[
+                                                    { required: true, message: 'Vui lòng xác nhận mật khẩu mới' },
+                                                    ({ getFieldValue }) => ({
+                                                        validator(_, value) {
+                                                            if (!value || getFieldValue('new_password') === value) return Promise.resolve();
+                                                            return Promise.reject(new Error('Mật khẩu xác nhận không khớp'));
+                                                        }
+                                                    })
+                                                ]}
+                                            >
+                                                <Input.Password placeholder="Nhập lại mật khẩu mới" />
                                             </Form.Item>
                                         </Col>
                                     </Row>

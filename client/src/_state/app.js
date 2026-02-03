@@ -9,6 +9,12 @@ const classPickerVisibleAtom = atom({
 const loadingVisibleAtom = atom({
     key: "loadingVisible",
     default: false
-})
+});
 
-export {classPickerVisibleAtom, loadingVisibleAtom}
+/** Khi 401/403: { from: string } (path đã encode). null = không hiện. */
+const sessionExpiredAtom = atom({
+    key: "sessionExpired",
+    default: null
+});
+
+export { classPickerVisibleAtom, loadingVisibleAtom, sessionExpiredAtom };

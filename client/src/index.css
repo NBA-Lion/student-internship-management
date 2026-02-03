@@ -45,3 +45,14 @@ body {
 .auth-wrapper .ant-layout-sider {
   display: none !important;
 }
+
+/* Admin Students Table - breathing layout, vertical alignment */
+.admin-students-table .ant-table-cell {
+  padding: 14px 16px;
+  vertical-align: middle !important;
+}
+
+.admin-students-table .ant-table-thead > tr > th {
+  padding: 14px 16px;
+  vertical-align: middle !important;
+}

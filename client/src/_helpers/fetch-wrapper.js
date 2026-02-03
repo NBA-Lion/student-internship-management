@@ -1,13 +1,11 @@
-import { useRecoilState } from 'recoil';
-import { history } from '_helpers';
-import { authAtom } from '_state';
-import { useAlertActions } from '_actions';
+import { useRecoilState, useSetRecoilState } from 'recoil';
+import { authAtom, sessionExpiredAtom } from '_state';
 
 export { useFetchWrapper };
 
 function useFetchWrapper() {
-    const [auth, setAuth] = useRecoilState(authAtom);
-    const alertActions = useAlertActions();
+    const [auth] = useRecoilState(authAtom);
+    const setSessionExpired = useSetRecoilState(sessionExpiredAtom);
 
     return {
         get: request('GET'),
@@ -33,23 +31,23 @@ function useFetchWrapper() {
                     : body;
             }
 
-            return fetch(url, requestOptions).then(handleResponse);
+            return fetch(url, requestOptions).then((response) => handleResponse(response, url));
         }
     }
 
     function authHeader(url) {
-        const token = auth; 
+        // Recoil có thể chưa sync; fallback localStorage để export/blob vẫn gửi token
+        const token = auth || (typeof window !== 'undefined' && localStorage.getItem('token')) || '';
         const isLoggedIn = !!token;
-        const isApiUrl = url.startsWith('/api') || url.startsWith('/admin') || url.startsWith('http'); 
-        
+        const isApiUrl = url.startsWith('/api') || url.startsWith('/admin') || url.startsWith('http');
+
         if (isLoggedIn && isApiUrl) {
             return { Authorization: `Bearer ${token}` };
-        } else {
-            return {};
         }
+        return {};
     }
 
-    function handleResponse(response) {
+    function handleResponse(response, requestUrl) {
         return response.text().then(text => {
             let data = null;
             try {
@@ -59,15 +57,19 @@ function useFetchWrapper() {
             }
             
             if (!response.ok) {
-                if ([401, 403].includes(response.status)) {
-                    console.log(">>> [Fetch] Phiên đăng nhập hết hạn. Logout.");
-                    localStorage.removeItem('userData');
-                    setAuth(null);
-                    window.location.href = '/account/login';
+                const isLoginRequest = typeof requestUrl === 'string' && (
+                    requestUrl.includes('/api/auth/login') || requestUrl.includes('/auth/login')
+                );
+                if ([401, 403].includes(response.status) && !isLoginRequest) {
+                    const from = encodeURIComponent(window.location.pathname + window.location.search || '');
+                    setSessionExpired({ from });
+                    return Promise.reject(new Error('SESSION_EXPIRED'));
+                }
+                if (isLoginRequest && response.status === 401) {
+                    return Promise.reject(new Error('Tài khoản hoặc mật khẩu không đúng'));
                 }
 
                 const error = (data && data.message) || response.statusText;
-                console.error(">>> [API Error]", error);
                 return Promise.reject(error);
             }
 

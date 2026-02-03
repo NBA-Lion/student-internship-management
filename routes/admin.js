@@ -1,33 +1,66 @@
 const express = require("express");
+const mongoose = require("mongoose");
 const User = require("../models/User");
 const { authMiddleware } = require("../middleware/auth");
+const { getDashboardStats } = require("../controllers/adminController");
 
 const router = express.Router();
+
+// Định nghĩa cột dùng chung cho CSV và Excel
+const EXPORT_HEADERS = [
+  { key: 'student_code', label: 'MSSV' },
+  { key: 'full_name', label: 'Họ và tên' },
+  { key: 'email', label: 'Email' },
+  { key: 'phone', label: 'Số điện thoại' },
+  { key: 'parent_number', label: 'SĐT phụ huynh' },
+  { key: 'address', label: 'Địa chỉ' },
+  { key: 'university', label: 'Trường' },
+  { key: 'faculty', label: 'Khoa' },
+  { key: 'major', label: 'Ngành' },
+  { key: 'class_name', label: 'Lớp' },
+  { key: 'internship_unit', label: 'Đơn vị thực tập' },
+  { key: 'internship_topic', label: 'Đề tài' },
+  { key: 'start_date', label: 'Ngày bắt đầu' },
+  { key: 'end_date', label: 'Ngày kết thúc' },
+  { key: 'internship_status', label: 'Trạng thái' },
+  { key: 'mentor_name', label: 'Người hướng dẫn' },
+  { key: 'mentor_feedback', label: 'Nhận xét' },
+  { key: 'report_score', label: 'Điểm báo cáo' },
+  { key: 'final_grade', label: 'Điểm tổng kết' },
+  { key: 'final_status', label: 'Kết quả' }
+];
 
 // Helper function để chuyển JSON sang CSV với UTF-8 BOM
 function convertToCSV(data, headers) {
   const BOM = '\uFEFF'; // UTF-8 BOM để Excel hiển thị đúng tiếng Việt
   
-  // Tạo header row
-  const headerRow = headers.map(h => `"${h.label}"`).join(',');
+  const headerRow = headers.map(h => `"${(h.label || h.key || '').replace(/"/g, '""')}"`).join(',');
   
-  // Tạo data rows
-  const rows = data.map(item => {
+  const rows = (Array.isArray(data) ? data : []).map(item => {
+    const raw = item && typeof item.toObject === 'function' ? item.toObject() : (item || {});
     return headers.map(h => {
-      const value = item[h.key];
+      let value = raw[h.key];
       if (value === null || value === undefined) return '""';
-      
-      // Format date
-      if (h.key.includes('date') || h.key.includes('Date')) {
-        if (value) {
-          const date = new Date(value);
-          return `"${date.toLocaleDateString('vi-VN')}"`;
+      // Mongoose ObjectId hoặc object
+      if (typeof value === 'object' && value !== null) {
+        if (value instanceof Date) {
+          return `"${value.toLocaleDateString('vi-VN')}"`;
         }
-        return '""';
+        if (value.toString && value.toString() !== '[object Object]') {
+          value = value.toString();
+        } else {
+          value = '';
+        }
       }
-      
-      // Escape quotes và wrap in quotes
-      const strValue = String(value).replace(/"/g, '""');
+      if (h.key.toLowerCase().includes('date')) {
+        try {
+          const d = new Date(value);
+          if (!isNaN(d.getTime())) return `"${d.toLocaleDateString('vi-VN')}"`;
+        } catch (_) {}
+      }
+      let strValue = String(value).replace(/"/g, '""');
+      // SĐT: thêm tab đầu để Excel mở CSV không đổi thành số (tránh 8.13E+08, mất số 0 đầu)
+      if ((h.key === 'phone' || h.key === 'parent_number') && strValue) strValue = '\t' + strValue;
       return `"${strValue}"`;
     }).join(',');
   }).join('\n');
@@ -42,6 +75,11 @@ const adminOnly = (req, res, next) => {
   }
   next();
 };
+
+// ============================================
+// GET /api/admin/dashboard - Analytics Dashboard (Recharts-compatible)
+// ============================================
+router.get("/dashboard", authMiddleware, adminOnly, getDashboardStats);
 
 // ============================================
 // GET /api/admin/stats - Thống kê cho Dashboard Admin
@@ -99,7 +137,7 @@ router.get("/stats", authMiddleware, adminOnly, async (req, res) => {
 // ============================================
 router.get("/students", authMiddleware, adminOnly, async (req, res) => {
   try {
-    const { status, search, major, university } = req.query;
+    const { status, search, major, university, period_id } = req.query;
 
     let query = { role: "student" };
 
@@ -121,26 +159,45 @@ router.get("/students", authMiddleware, adminOnly, async (req, res) => {
       query.university = { $regex: university, $options: 'i' };
     }
 
-    // Tìm kiếm theo tên hoặc mã SV nếu có
-    if (search) {
+    // Tìm kiếm theo tên, mã SV hoặc email
+    if (search && search.trim()) {
       const searchConditions = {
         $or: [
-          { full_name: { $regex: search, $options: 'i' } },
-          { student_code: { $regex: search, $options: 'i' } }
+          { full_name: { $regex: search.trim(), $options: 'i' } },
+          { student_code: { $regex: search.trim(), $options: 'i' } },
+          { email: { $regex: search.trim(), $options: 'i' } }
         ]
       };
-      
       if (query.$or) {
-        // Nếu đã có $or từ status filter, cần kết hợp với $and
         query = { $and: [query, searchConditions] };
       } else {
         query = { ...query, ...searchConditions };
       }
     }
 
+    // Lọc theo đợt thực tập: period_id có thể là ObjectId hoặc tên đợt (string)
+    if (period_id) {
+      if (mongoose.Types.ObjectId.isValid(period_id) && String(new mongoose.Types.ObjectId(period_id)) === String(period_id)) {
+        query.internship_period_id = period_id;
+      } else {
+        query.internship_period = { $regex: RegExp(`^${String(period_id).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`), $options: "i" };
+      }
+    }
+
     const students = await User.find(query)
       .select("-password")
       .sort({ createdAt: -1 });
+
+    // Sanitize: internship_period không được chứa tên người (vd: "Nguyễn Văn A")
+    const periodNamePattern = /^(đợt|kỳ|hè|đông|xuân|202\d|20\d\d)/i;
+    const sanitizePeriod = (val) => {
+      if (val == null || String(val).trim() === "") return null;
+      const s = String(val).trim();
+      if (periodNamePattern.test(s)) return s; // Hợp lệ
+      // Nếu giống tên người (chỉ chữ, không số, < 50 ký tự) → coi là dữ liệu lỗi
+      if (s.length < 50 && /^[A-ZÀ-Ỹa-zà-ỹ\s]+$/.test(s)) return null;
+      return s;
+    };
 
     // Map dữ liệu cho frontend (đảm bảo tương thích với cả field cũ và mới)
     const data = students.map(user => ({
@@ -151,6 +208,8 @@ router.get("/students", authMiddleware, adminOnly, async (req, res) => {
       email: user.email,
       phone: user.phone,
       phone_number: user.phone,  // Alias
+      parent_number: user.parent_number,
+      address: user.address,
       university: user.university,
       faculty: user.faculty,
       major: user.major,
@@ -158,6 +217,8 @@ router.get("/students", authMiddleware, adminOnly, async (req, res) => {
       department: user.internship_unit,  // Alias
       internship_unit: user.internship_unit,
       internship_topic: user.internship_topic,
+      internship_period: sanitizePeriod(user.internship_period),
+      internship_period_id: user.internship_period_id,
       start_date: user.start_date,
       end_date: user.end_date,
       status: user.internship_status || user.registration_status,
@@ -196,7 +257,7 @@ router.get("/users/all", authMiddleware, adminOnly, async (req, res) => {
 // ============================================
 router.get("/export/csv", authMiddleware, adminOnly, async (req, res) => {
   try {
-    const { status, major, university } = req.query;
+    const { status, major, university, period_id } = req.query;
 
     let query = { role: "student" };
 
@@ -213,35 +274,17 @@ router.get("/export/csv", authMiddleware, adminOnly, async (req, res) => {
     if (university) {
       query.university = { $regex: university, $options: 'i' };
     }
+    if (period_id) {
+      query.internship_period_id = period_id;
+    }
 
     const students = await User.find(query)
       .select("-password")
-      .sort({ student_code: 1 });
-
-    // Định nghĩa headers cho CSV
-    const headers = [
-      { key: 'student_code', label: 'MSSV' },
-      { key: 'full_name', label: 'Họ và tên' },
-      { key: 'email', label: 'Email' },
-      { key: 'phone', label: 'Số điện thoại' },
-      { key: 'university', label: 'Trường' },
-      { key: 'faculty', label: 'Khoa' },
-      { key: 'major', label: 'Ngành' },
-      { key: 'class_name', label: 'Lớp' },
-      { key: 'internship_unit', label: 'Đơn vị thực tập' },
-      { key: 'internship_topic', label: 'Đề tài' },
-      { key: 'start_date', label: 'Ngày bắt đầu' },
-      { key: 'end_date', label: 'Ngày kết thúc' },
-      { key: 'internship_status', label: 'Trạng thái' },
-      { key: 'mentor_name', label: 'Người hướng dẫn' },
-      { key: 'mentor_feedback', label: 'Nhận xét' },
-      { key: 'report_score', label: 'Điểm báo cáo' },
-      { key: 'final_grade', label: 'Điểm tổng kết' },
-      { key: 'final_status', label: 'Kết quả' }
-    ];
+      .sort({ student_code: 1 })
+      .lean();
 
     // Convert sang CSV với BOM
-    const csvData = convertToCSV(students, headers);
+    const csvData = convertToCSV(students, EXPORT_HEADERS);
 
     // Set headers để browser download file
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
@@ -267,8 +310,9 @@ router.put("/students/:id", authMiddleware, adminOnly, async (req, res) => {
       return res.status(404).json({ status: "Error", message: "Không tìm thấy sinh viên" });
     }
 
-    // Admin có thể cập nhật các trường sau
+    // Admin có thể cập nhật các trường sau (bao gồm thông tin cơ bản, SĐT phụ huynh, địa chỉ)
     const allowedFields = [
+      "full_name", "email", "phone", "parent_number", "address", "university", "faculty", "major", "class_name",
       "internship_status", "registration_status", "status",
       "mentor_name", "mentor_email", "mentor_phone",
       "mentor_feedback", "report_score", "final_grade", "final_status",
@@ -300,6 +344,29 @@ router.put("/students/:id", authMiddleware, adminOnly, async (req, res) => {
     });
   } catch (error) {
     console.error(">>> [Admin Route] Lỗi cập nhật SV:", error.message);
+    return res.status(500).json({ status: "Error", message: "Lỗi server", error: error.message });
+  }
+});
+
+// ============================================
+// DELETE /api/admin/students/:id - Xóa sinh viên (Admin only, theo student_code)
+// ============================================
+router.delete("/students/:id", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const studentCode = req.params.id;
+
+    const user = await User.findOne({ student_code: studentCode, role: "student" });
+    if (!user) {
+      return res.status(404).json({ status: "Error", message: "Không tìm thấy sinh viên" });
+    }
+
+    await User.deleteOne({ student_code: studentCode });
+    return res.json({
+      status: "Success",
+      message: "Đã xóa sinh viên",
+    });
+  } catch (error) {
+    console.error(">>> [Admin Route] Lỗi xóa SV:", error.message);
     return res.status(500).json({ status: "Error", message: "Lỗi server", error: error.message });
   }
 });

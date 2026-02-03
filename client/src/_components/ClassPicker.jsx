@@ -51,13 +51,15 @@ function ClassPicker(props) {
 
     let Cards = [];
     for(let i = 0; i < input.length; i++) {
+        const item = input[i];
+        const uniqueKey = item._id || item.class_id || item.id || `class-${i}`;
         Cards.push(
-            <div key = {input[i].class_id} onClick = {() => {
-                        classWrapper.chooseClass(input[i]);
+            <div key={uniqueKey} onClick={() => {
+                        classWrapper.chooseClass(item);
                     }}>
                 <Col>
-                    <Link to={"/" + input[i].class_id + "/"} onClick={onDrawerClose}>
-                        <Card title = {input[i].class_name} 
+                    <Link to={"/" + (item.class_id || item._id) + "/"} onClick={onDrawerClose}>
+                        <Card title={item.class_name} 
                         style = {cardStyle} headStyle = {cardHeadStyle}
                         cover={<img alt="example" src={'https://maisienoble.github.io/jig/images/backgrounds/blueish.jpg'} />}
                         hoverable = 'true'>

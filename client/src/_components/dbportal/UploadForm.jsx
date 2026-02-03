@@ -49,29 +49,38 @@ function UploadForm(props) {
       .filter(col => col.dataIndex !== 'error')
       .map(col => col.dataIndex);
 
-    // Generate 2 rows of sample data based on column types
-    const generateSampleValue = (dataIndex, rowNum) => {
+    // Detect template type for context-aware sample (e.g. student vs lecturer email)
+    const templateType = props.templateType || (props.formurl && props.formurl.includes('lecturer') ? 'lecturer' : (props.formurl && props.formurl.includes('users') ? 'student' : ''));
+
+    // Generate 2 rows of sample data based on column types (TASK 3: Vietnamese headers + dob, phone, class_name)
+    const generateSampleValue = (dataIndex, rowNum, templateKind) => {
+      const kind = templateKind != null ? templateKind : templateType;
       const samples = {
         // ============================================
-        // STUDENT FIELDS
+        // STUDENT FIELDS (Preferred Vietnamese sample file)
         // ============================================
         'vnu_id': ['SV001', 'SV002'],
         'student_code': ['SV001', 'SV002'],
         'name': ['Nguyễn Văn A', 'Trần Thị B'],
         'full_name': ['Nguyễn Văn A', 'Trần Thị B'],
         'date_of_birth': ['01/01/2000', '15/06/2001'],
+        'dob': ['01/01/2000', '15/06/2001'],
         'phone_number': ['0987654321', '0123456789'],
+        'phone': ['0987654321', '0123456789'],
+        'parent_number': ['0813087990', '0912345678'],
+        'address': ['Khu Trung Đoàn 918, Long Biên, Hà Nội', '123 Nguyễn Huệ, Q.1, TP.HCM'],
         'gender': ['Nam', 'Nữ'],
         'role': ['student', 'student'],
         'location': ['Hà Nội', 'TP. Hồ Chí Minh'],
+        'class_name': ['CNTT-K62', 'CNTT-K63'],
         'username': ['nguyenvana', 'tranthib'],
         'password': ['123456', '123456'],
+        'email': kind === 'lecturer' ? ['gv001@vnu.edu.vn', 'gv002@vnu.edu.vn'] : ['sv001@student.intern.local', 'sv002@student.intern.local'],
         
         // ============================================
         // LECTURER FIELDS (Giảng viên hướng dẫn)
         // ============================================
         'lecturer_id': ['GV001', 'GV002'],
-        'email': ['gv001@vnu.edu.vn', 'gv002@vnu.edu.vn'],
         'department': ['Khoa CNTT', 'Viện Điện tử'],
         
         // ============================================
@@ -141,9 +150,8 @@ function UploadForm(props) {
     // Add worksheet to workbook
     XLSX.utils.book_append_sheet(wb, ws, 'Mẫu Import');
 
-    // Generate filename based on templateType or form URL
+    // Generate filename based on templateType or form URL (reuse templateType from above)
     let filename = 'Mau_Import.xlsx';
-    const templateType = props.templateType || '';
     
     if (templateType) {
       const filenameMap = {
@@ -230,7 +238,18 @@ const delError = (col) => {
           <br/>
           <br/>
           <b>Thành công:</b>
-          {props.columns && <Table columns={delError(props.columns)} dataSource={result.registered || []} rowKey={(r, i) => i} />}
+          {props.columns && (
+            <Table
+              columns={delError(props.columns)}
+              dataSource={(result.registered || []).map((r, i) => ({
+                ...r,
+                key: i,
+                batch_id: r.batch_id ?? r.code,
+                batch_name: r.batch_name ?? r.name,
+              }))}
+              rowKey={(r, i) => r.key ?? i}
+            />
+          )}
           
           <b>Thất bại:</b>
           {props.columns && <Table columns={props.columns} dataSource={result.failed || []} rowKey={(r, i) => i} />}

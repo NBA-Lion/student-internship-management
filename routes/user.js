@@ -1,9 +1,17 @@
 const express = require("express");
+const mongoose = require("mongoose");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
+const bcrypt = require("bcryptjs");
 const User = require("../models/User");
+const InternshipPeriod = require("../models/InternshipPeriod");
 const { authMiddleware } = require("../middleware/auth");
+const { logActivity } = require("../services/activityService");
+
+function isBcryptHash(str) {
+  return typeof str === "string" && str.length === 60 && str.startsWith("$2");
+}
 
 const router = express.Router();
 
@@ -68,6 +76,8 @@ router.get("/profile/me", authMiddleware, async (req, res) => {
       role: user.role,
       phone: user.phone,
       phone_number: user.phone,
+      parent_number: user.parent_number,
+      address: user.address,
       dob: user.dob,
       date_of_birth: user.dob,
       gender: user.gender,
@@ -79,6 +89,7 @@ router.get("/profile/me", authMiddleware, async (req, res) => {
       internship_unit: user.internship_unit,
       internship_topic: user.internship_topic,
       internship_period: user.internship_period,
+      internship_period_id: user.internship_period_id,
       start_date: user.start_date,
       end_date: user.end_date,
       intern_start_date: user.start_date,
@@ -137,6 +148,8 @@ router.get("/profile/:id", authMiddleware, async (req, res) => {
       role: user.role,
       phone: user.phone,
       phone_number: user.phone,
+      parent_number: user.parent_number,
+      address: user.address,
       dob: user.dob,
       date_of_birth: user.dob,
       gender: user.gender,
@@ -148,6 +161,7 @@ router.get("/profile/:id", authMiddleware, async (req, res) => {
       internship_unit: user.internship_unit,
       internship_topic: user.internship_topic,
       internship_period: user.internship_period,
+      internship_period_id: user.internship_period_id,
       start_date: user.start_date,
       end_date: user.end_date,
       intern_start_date: user.start_date,
@@ -195,10 +209,10 @@ router.post("/profile/:id", authMiddleware, async (req, res) => {
       return res.status(404).json({ status: "Error", message: "Không tìm thấy người dùng" });
     }
 
-    // Các trường cho phép user tự sửa
+    // Các trường cho phép user tự sửa (bao gồm class_name, parent_number, address)
     const allowedFieldsForUser = [
-      "name", "full_name", "phone_number", "date_of_birth", "gender",
-      "university", "faculty", "major", "department",
+      "name", "full_name", "phone_number", "parent_number", "address", "date_of_birth", "gender",
+      "university", "faculty", "major", "class_name", "department",
       "internship_topic", "intern_start_date", "intern_end_date",
       "cv_url", "recommendation_letter_url"
     ];
@@ -239,12 +253,32 @@ router.post("/profile/:id", authMiddleware, async (req, res) => {
       updateData[dbField] = value;
     }
 
-    // Xử lý đổi mật khẩu nếu có
+    // Luôn áp dụng Lớp/Khoa/Ngành nếu có trong body (kể cả chuỗi rỗng) để sửa giá trị sai
+    if (Object.prototype.hasOwnProperty.call(body, "class_name")) {
+      updateData.class_name = body.class_name == null ? "" : String(body.class_name);
+    }
+    if (Object.prototype.hasOwnProperty.call(body, "faculty")) {
+      updateData.faculty = body.faculty == null ? "" : String(body.faculty);
+    }
+    if (Object.prototype.hasOwnProperty.call(body, "major")) {
+      updateData.major = body.major == null ? "" : String(body.major);
+    }
+    if (Object.prototype.hasOwnProperty.call(body, "parent_number")) {
+      updateData.parent_number = body.parent_number == null ? "" : String(body.parent_number);
+    }
+    if (Object.prototype.hasOwnProperty.call(body, "address")) {
+      updateData.address = body.address == null ? "" : String(body.address);
+    }
+
+    // Xử lý đổi mật khẩu nếu có (hash với bcrypt)
     if (body.new_password && body.old_password) {
-      if (user.password !== body.old_password) {
+      const oldMatch = isBcryptHash(user.password)
+        ? await bcrypt.compare(body.old_password, user.password)
+        : user.password === body.old_password;
+      if (!oldMatch) {
         return res.status(400).json({ status: "Error", message: "Mật khẩu cũ không đúng" });
       }
-      updateData.password = body.new_password;
+      updateData.password = await bcrypt.hash(body.new_password, 10);
     }
 
     // Cập nhật vào DB
@@ -253,17 +287,61 @@ router.post("/profile/:id", authMiddleware, async (req, res) => {
     // Lấy lại user sau khi update
     const updatedUser = await User.findOne({ student_code: targetId }).select("-password");
 
+    await logActivity({
+      type: "profile_update",
+      title: `Sinh viên ${updatedUser.full_name || targetId} đã cập nhật thông tin hồ sơ.`,
+      actor_name: updatedUser.full_name,
+      actor_code: updatedUser.student_code,
+      user_id: req.user._id,
+    });
+
+    // Trả về full profile (giống GET) để frontend cập nhật ngay, tránh hiển thị dữ liệu cũ
+    const responseData = {
+      _id: updatedUser._id,
+      student_code: updatedUser.student_code,
+      vnu_id: updatedUser.student_code,
+      name: updatedUser.full_name,
+      full_name: updatedUser.full_name,
+      email: updatedUser.email,
+      role: updatedUser.role,
+      phone: updatedUser.phone,
+      phone_number: updatedUser.phone,
+      parent_number: updatedUser.parent_number,
+      address: updatedUser.address,
+      dob: updatedUser.dob,
+      date_of_birth: updatedUser.dob,
+      gender: updatedUser.gender,
+      university: updatedUser.university,
+      faculty: updatedUser.faculty,
+      major: updatedUser.major,
+      class_name: updatedUser.class_name,
+      department: updatedUser.internship_unit,
+      internship_unit: updatedUser.internship_unit,
+      internship_topic: updatedUser.internship_topic,
+      internship_period: updatedUser.internship_period,
+      internship_period_id: updatedUser.internship_period_id,
+      start_date: updatedUser.start_date,
+      end_date: updatedUser.end_date,
+      intern_start_date: updatedUser.start_date,
+      intern_end_date: updatedUser.end_date,
+      cv_url: updatedUser.cv_url,
+      recommendation_letter_url: updatedUser.recommendation_letter_url,
+      internship_status: updatedUser.internship_status || updatedUser.registration_status,
+      registration_status: updatedUser.registration_status || updatedUser.internship_status,
+      mentor_name: updatedUser.mentor_name,
+      mentor_email: updatedUser.mentor_email,
+      mentor_phone: updatedUser.mentor_phone,
+      mentor_feedback: updatedUser.mentor_feedback,
+      report_score: updatedUser.report_score,
+      final_grade: updatedUser.final_grade,
+      final_status: updatedUser.final_status,
+      admin_note: updatedUser.admin_note,
+    };
+
     return res.json({ 
       status: "Success", 
       message: "Cập nhật thành công",
-      data: {
-        _id: updatedUser._id,
-        student_code: updatedUser.student_code,
-        name: updatedUser.full_name,
-        full_name: updatedUser.full_name,
-        email: updatedUser.email,
-        role: updatedUser.role,
-      }
+      data: responseData,
     });
   } catch (error) {
     console.error(">>> [User Route] Lỗi cập nhật profile:", error.message);
@@ -485,6 +563,7 @@ router.put("/internship-registration", authMiddleware, async (req, res) => {
     const { 
       topic,              // Đề tài thực tập
       internship_unit,    // Đơn vị thực tập
+      period_id,          // Đợt thực tập (ObjectId hoặc string _id)
       start_date,         // Ngày bắt đầu
       end_date,           // Ngày kết thúc
       cv_url,             // Link CV (đã upload trước đó)
@@ -526,6 +605,18 @@ router.put("/internship-registration", authMiddleware, async (req, res) => {
       registration_status: "Chờ duyệt"
     };
 
+    // Đợt thực tập: lưu internship_period_id + internship_period (tên) để dashboard thống kê
+    if (period_id && String(period_id).trim()) {
+      const period = await InternshipPeriod.findById(period_id).select("name code");
+      if (period) {
+        updateData.internship_period_id = period._id;
+        updateData.internship_period = period.name || period.code || String(period._id);
+      }
+    } else {
+      updateData.internship_period_id = null;
+      updateData.internship_period = null;
+    }
+
     // Optional fields
     if (cv_url) updateData.cv_url = cv_url;
     if (introduction_letter_url) updateData.recommendation_letter_url = introduction_letter_url;
@@ -538,10 +629,17 @@ router.put("/internship-registration", authMiddleware, async (req, res) => {
     // Lấy lại user sau khi update
     const updatedUser = await User.findOne({ student_code: studentCode }).select("-password");
 
+    await logActivity({
+      type: "registration",
+      title: `Sinh viên ${updatedUser.full_name} đã đăng ký thực tập.`,
+      actor_name: updatedUser.full_name,
+      actor_code: updatedUser.student_code,
+      user_id: req.user._id,
+    });
+
     // Emit notification qua Socket.IO (thông báo cho Admin)
     const io = req.app.get("io");
     if (io) {
-      // Gửi notification đến tất cả admin
       io.emit("new_registration", {
         student_code: updatedUser.student_code,
         student_name: updatedUser.full_name,
@@ -603,7 +701,9 @@ router.put("/:id/evaluation", authMiddleware, async (req, res) => {
       report_score,       // Điểm báo cáo (0-10)
       final_grade,        // Điểm tổng kết (0-10) - tính tự động hoặc nhập tay
       final_status,       // Trạng thái: "Đạt" / "Không đạt"
-      admin_note          // Ghi chú từ Admin (optional)
+      admin_note,         // Ghi chú từ Admin (optional)
+      internship_status,  // Trạng thái thực tập: Chờ duyệt, Đang thực tập, Đã hoàn thành, Từ chối
+      period_id           // Đợt thực tập (ObjectId)
     } = req.body;
 
     const updateData = {};
@@ -654,11 +754,51 @@ router.put("/:id/evaluation", authMiddleware, async (req, res) => {
       updateData.admin_note = admin_note;
     }
 
+    // Trạng thái thực tập (Chờ duyệt, Đang thực tập, Đã hoàn thành, Từ chối)
+    if (internship_status !== undefined) {
+      const valid = ["Chờ duyệt", "Đang thực tập", "Đã hoàn thành", "Từ chối"];
+      if (valid.includes(internship_status)) {
+        updateData.internship_status = internship_status;
+        updateData.registration_status = internship_status;
+      }
+    }
+
+    // Đợt thực tập: period_id có thể là ObjectId (từ bảng InternshipPeriod) hoặc tên đợt (string)
+    if (period_id !== undefined) {
+      if (period_id && String(period_id).trim()) {
+        const isObjectId = mongoose.Types.ObjectId.isValid(period_id) && String(new mongoose.Types.ObjectId(period_id)) === String(period_id);
+        const period = isObjectId ? await InternshipPeriod.findById(period_id).select("name code") : null;
+        if (period) {
+          updateData.internship_period_id = period._id;
+          updateData.internship_period = period.name || period.code || String(period._id);
+        } else {
+          // Không tìm thấy đợt theo ID hoặc gửi lên là tên đợt → lưu dạng chuỗi
+          updateData.internship_period_id = null;
+          updateData.internship_period = String(period_id).trim();
+        }
+      } else {
+        updateData.internship_period_id = null;
+        updateData.internship_period = null;
+      }
+    }
+
     // Cập nhật vào DB
     await User.updateOne({ _id: user._id }, { $set: updateData });
 
     // Lấy lại user sau khi update
     const updatedUser = await User.findById(user._id).select("-password");
+
+    // Ghi nhật ký hoạt động
+    const studentName = updatedUser.full_name || updatedUser.name || updatedUser.student_code || "Sinh viên";
+    await logActivity({
+      type: "evaluation",
+      title: final_status === "Đạt"
+        ? `Hồ sơ của ${studentName} đã được duyệt (Đạt).`
+        : `Đã cập nhật đánh giá cho ${studentName}.`,
+      actor_name: studentName,
+      actor_code: updatedUser.student_code,
+      user_id: req.user._id,
+    });
 
     // Emit notification cho sinh viên
     const io = req.app.get("io");

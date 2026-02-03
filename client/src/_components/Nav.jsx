@@ -1,20 +1,17 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { useRecoilValue } from 'recoil';
-import { authAtom } from '_state';
 import { useUserActions } from '_actions';
 import 'antd/dist/antd.css';
 
-import { Layout, Menu, Tag } from 'antd';
+import { Layout, Menu } from 'antd';
 import {
     HomeOutlined,
     UserOutlined,
     TableOutlined,
     LoginOutlined,
-    TeamOutlined,
-    FileTextOutlined,
     FormOutlined,
-    DatabaseOutlined
+    DatabaseOutlined,
+    BarChartOutlined
 } from '@ant-design/icons';
 
 const { Sider } = Layout;
@@ -26,26 +23,12 @@ function Nav(props) {
     const [collapsed, setCollapsed] = useState(false);
     const onCollapse = (collapsed) => setCollapsed(collapsed);
     const userActions = useUserActions();
-    const auth = props.auth;
+    const authFromRecoil = props.auth;
+    const authFromStorage = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    const hasAuth = authFromRecoil || authFromStorage;
     const userData = JSON.parse(localStorage.getItem("userData") || "{}");
 
-    useEffect(() => {
-        console.log("NAV constructing");
-    }, []);
-
-    if (!auth) return null;
-
-    // Lấy role để hiển thị badge
-    const getRoleBadge = () => {
-        switch (userData?.role) {
-            case 'admin':
-                return <Tag color="red" style={{ marginLeft: 8 }}>Admin</Tag>;
-            case 'student':
-                return <Tag color="blue" style={{ marginLeft: 8 }}>SV</Tag>;
-            default:
-                return null;
-        }
-    };
+    if (!hasAuth) return null;
 
     return (
         <Sider 
@@ -77,6 +60,11 @@ function Nav(props) {
                 {/* Menu cho Admin */}
                 {userData?.role === "admin" && (
                     <>
+                        <Menu.Item key="/admin/dashboard">
+                            <BarChartOutlined />
+                            <span>Thống kê (Analytics)</span>
+                            <Link to="/admin/dashboard" />
+                        </Menu.Item>
                         <Menu.Item key="/admin/students">
                             <TableOutlined />
                             <span>Quản lý SV thực tập</span>

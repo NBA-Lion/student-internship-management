@@ -3,7 +3,7 @@ import { Route, Switch, Redirect } from 'react-router-dom';
 import { useRecoilValue } from 'recoil';
 
 import { authAtom } from '_state';
-import { Login, Register } from 'pages/Auth';
+import { Login, Register, ForgotPassword } from 'pages/Auth';
 import { PasswordRecover } from './';
 
 export { Account };
@@ -14,7 +14,11 @@ function Account({ history, match }) {
     const { path } = match;
 
     useEffect(() => {
-        if (auth) history.push('/');
+        let isMounted = true;
+        if (auth) {
+            if (isMounted) history.push('/');
+        }
+        return () => { isMounted = false; };
     }, [auth, history]);
 
     return (
@@ -22,6 +26,7 @@ function Account({ history, match }) {
             {/* Login & Register have their own full-page layout with split-card design */}
             <Route path={`${path}/login`} component={Login} />
             <Route path={`${path}/register`} component={Register} />
+            <Route path={`${path}/forgot-password`} component={ForgotPassword} />
             
             {/* Password recover uses the centered card wrapper */}
             <Route path={`${path}/passwordrecover`}>

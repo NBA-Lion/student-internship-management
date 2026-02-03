@@ -1,0 +1,35 @@
+================================================================================
+  FILE KẾT QUẢ THỰC TẬP VÀ CẬP NHẬT TÌNH TRẠNG - SV004, SV006
+  Dùng để import qua /dbportal
+================================================================================
+  Lưu ý: Lưu với encoding UTF-8. Dùng dấu phẩy (,) hoặc Tab để ngăn cách cột.
+================================================================================
+
+
+---------- 5. IMPORT KẾT QUẢ THỰC TẬP ----------
+(Cột: Mã sinh viên, Mã đợt, Điểm thực tập, Nhận xét)
+
+Mã sinh viên,Mã đợt,Điểm thực tập,Nhận xét
+SV004,2025-HE,8.0,Hoàn thành đúng tiến độ
+SV006,2025-HE,8.5,Có tiến bộ tốt trong quá trình thực tập
+
+
+---------- 6. CẬP NHẬT TÌNH TRẠNG THỰC TẬP ----------
+(Cột: VNU-ID hoặc Mã sinh viên, Trạng thái)
+
+VNU-ID,Trạng thái
+SV004,Đã hoàn thành
+SV006,Đã hoàn thành
+
+(Trạng thái có thể: Chờ duyệt, Đang thực tập, Đã hoàn thành, Từ chối)
+
+
+================================================================================
+  CÁCH DÙNG
+================================================================================
+1. Copy khối 5 hoặc khối 6 riêng vào Notepad.
+2. Lưu file .csv (UTF-8), ví dụ: ket_qua_thuc_tap.csv hoặc tinh_trang_thuc_tap.csv
+3. Vào /dbportal:
+   - Chọn "Import Kết quả thực tập" → upload file khối 5
+   - Chọn "Cập nhật tình trạng thực tập" → upload file khối 6
+================================================================================

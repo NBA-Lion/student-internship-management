@@ -1,0 +1,133 @@
+================================================================================
+  VÍ DỤ DỮ LIỆU TEST IMPORT - Copy từng khối vào Notepad, lưu .csv rồi mở Excel
+  Hoặc copy trực tiếp vào dòng đầu tiên của Excel (dòng 1 = tiêu đề, dòng 2+ = dữ liệu)
+================================================================================
+  Lưu ý: Dùng dấu phẩy (,) hoặc Tab để ngăn cách cột. Nếu dùng Excel: Paste vào,
+  sau đó "Data" > "Text to Columns" chọn Delimiter là Comma hoặc Tab.
+================================================================================
+
+
+---------- 1. DANH SÁCH GIẢNG VIÊN HƯỚNG DẪN ----------
+(Cột: Mã GV, Họ tên, Email, Khoa/Viện, Username, Password, Số điện thoại)
+
+Mã GV,Họ tên,Email,Khoa/Viện,Username,Password,Số điện thoại
+GV001,Nguyễn Văn An,gv001@vnu.edu.vn,Khoa CNTT,gv001,123456,0912345001
+GV002,Trần Thị Bình,gv002@vnu.edu.vn,Viện Điện tử,gv002,123456,0912345002
+GV003,Lê Văn Cường,gv003@vnu.edu.vn,Khoa CNTT,gv003,123456,0912345003
+
+
+---------- 2. DANH SÁCH SINH VIÊN ----------
+(Cột: Mã sinh viên, Họ và tên, Email, Ngày sinh, Giới tính, Số điện thoại, SĐT phụ huynh, Địa chỉ, Lớp, Quê quán, Username, Password, Vai trò)
+(Lưu ý: SĐT phụ huynh và Địa chỉ là tùy chọn; có thể để trống.)
+
+Mã sinh viên,Họ và tên,Email,Ngày sinh,Giới tính,Số điện thoại,SĐT phụ huynh,Địa chỉ,Lớp,Quê quán,Username,Password,Vai trò
+SV001,Nguyễn Văn A,sv001@student.intern.local,01/01/2000,Nam,0987654321,0813087990,Khu Trung Đoàn 918 Long Biên Hà Nội,CNTT-K62,Hà Nội,sv001,123456,student
+SV002,Trần Thị B,sv002@student.intern.local,15/06/2001,Nữ,0123456789,0912345678,123 Nguyễn Huệ Q.1 TP.HCM,CNTT-K62,TP. Hồ Chí Minh,sv002,123456,student
+SV003,Đặng Văn C,,20/03/1999,Nam,0987000111,,,CNTT-K63,Nam Định,sv003,123456,student
+
+(Lưu ý: Dòng SV003 để trống Email - hệ thống sẽ tự sinh: SV003@student.intern.local)
+
+
+---------- 3. DANH SÁCH DOANH NGHIỆP ----------
+(Cột: Tên công ty, Địa chỉ, Email liên hệ, Lĩnh vực)
+
+Tên công ty,Địa chỉ,Email liên hệ,Lĩnh vực
+FPT Software,Tòa nhà FPT Cầu Giấy Hà Nội,hr@fpt.com.vn,Công nghệ thông tin
+Viettel Solutions,1 Trần Hữu Dực Nam Từ Liêm Hà Nội,tuyendung@viettel.com.vn,Viễn thông và CNTT
+VNPT-IT,50 Láng Hạ Đống Đa Hà Nội,hr@vnpt-it.vn,Công nghệ thông tin
+
+
+---------- 4. DANH SÁCH ĐỢT THỰC TẬP ----------
+(Cột: Mã đợt, Tên đợt, Ngày bắt đầu, Ngày kết thúc)
+
+Mã đợt,Tên đợt,Ngày bắt đầu,Ngày kết thúc
+2025-HE,Đợt Hè 2025,01/06/2025,31/08/2025
+2025-DONG,Đợt Đông 2025,01/12/2025,28/02/2026
+
+
+---------- 5. IMPORT KẾT QUẢ THỰC TẬP ----------
+(Cột: Mã sinh viên, Mã đợt, Điểm thực tập, Nhận xét)
+
+Mã sinh viên,Mã đợt,Điểm thực tập,Nhận xét
+SV001,2025-HE,8.5,Hoàn thành tốt nhiệm vụ
+SV002,2025-HE,9.0,Xuất sắc có khả năng làm việc độc lập
+SV003,2025-HE,7.5,Đạt yêu cầu
+
+
+---------- 6. CẬP NHẬT TÌNH TRẠNG THỰC TẬP ----------
+(Cột: VNU-ID hoặc Mã sinh viên, Trạng thái)
+
+VNU-ID,Trạng thái
+SV001,Đang thực tập
+SV002,Đang thực tập
+SV003,Chờ duyệt
+
+(Trạng thái có thể: Chờ duyệt, Đang thực tập, Đã hoàn thành, Từ chối)
+
+
+================================================================================
+  KHI DỮ LIỆU BỊ TRÙNG THÌ SAO?
+================================================================================
+Hệ thống dùng cơ chế "UPSERT": nếu đã tồn tại bản ghi cùng khóa (mã/email/tên)
+thì sẽ CẬP NHẬT ĐÈ (update), không tạo bản ghi mới và không báo lỗi.
+
+  • Sinh viên:  Trùng "Mã sinh viên"     → cập nhật đè thông tin SV đó.
+  • Giảng viên: Trùng "Email"            → cập nhật đè thông tin GV đó.
+  • Doanh nghiệp: Trùng "Tên công ty"    → cập nhật đè thông tin DN đó.
+  • Đợt thực tập: Trùng "Mã đợt"         → cập nhật đè thông tin đợt đó.
+  • Kết quả / Trạng thái: logic tương tự (theo mã SV + mã đợt hoặc theo quy định).
+
+Sau khi import xong, kết quả trả về có:
+  - Thành công: số dòng xử lý thành công (gồm cả dòng mới và dòng trùng bị cập nhật).
+  - Thất bại: chỉ những dòng lỗi (thiếu bắt buộc, sai định dạng, v.v.).
+
+Nếu muốn tránh ghi đè: không đưa vào file những mã/email/tên đã có trong hệ thống;
+chỉ thêm dòng mới. Nếu cố tình import trùng = bạn đang "sửa hàng loạt" bản ghi đó.
+================================================================================
+
+
+================================================================================
+  CÁCH DÙNG NHANH
+================================================================================
+1. Copy cả khối (từ dòng tiêu đề đến hết dữ liệu) vào Notepad.
+2. Lưu file: File > Save As > chọn "All Files", tên file ví dụ: test_sinhvien.csv
+   Encoding: UTF-8 (để tiếng Việt hiển thị đúng).
+3. Mở file .csv bằng Excel, kiểm tra cột đúng.
+4. Nếu cần: Save As .xlsx.
+5. Vào trang Import dữ liệu (/dbportal), chọn khối tương ứng, "Chọn file" > "Tải lên".
+
+Hoặc: Mở Excel, dòng 1 paste tiêu đề, dòng 2+ paste dữ liệu (copy từng cột hoặc
+dùng Data > Text to Columns với delimiter là dấu phẩy).
+================================================================================
+
+
+================================================================================
+  VÍ DỤ TEST: BIỂU ĐỒ "SỐ SINH VIÊN THEO ĐỢT THỰC TẬP" (Admin Dashboard)
+================================================================================
+Để biểu đồ "Số sinh viên theo đợt thực tập" có dữ liệu, làm lần lượt:
+
+Bước 1 – Import đợt thực tập
+  • Vào /dbportal → chọn khối "Danh sách Đợt thực tập".
+  • Upload file Excel/CSV có cột: Mã đợt, Tên đợt, Ngày bắt đầu, Ngày kết thúc.
+  • Dùng mẫu khối 4 ở trên (2025-HE, 2025-DONG).
+  → Kết quả: Trong DB có 2 đợt (code: 2025-HE, 2025-DONG).
+
+Bước 2 – Import sinh viên (nếu chưa có)
+  • Chọn khối "Danh sách Sinh viên", upload file mẫu khối 2 (SV001, SV002, SV003).
+  → Kết quả: Có 3 sinh viên trong hệ thống.
+
+Bước 3 – Import kết quả thực tập (có cột Mã đợt)
+  • Chọn khối "Import Kết quả thực tập" (Internship Result / Grades).
+  • Upload file có cột: Mã sinh viên, Mã đợt, Điểm thực tập, Nhận xét.
+  • Dùng mẫu khối 5 ở trên (SV001/2025-HE, SV002/2025-HE, SV003/2025-HE).
+  → Hệ thống vừa cập nhật điểm/nhận xét, vừa gán đợt thực tập (internship_period_id)
+    cho từng sinh viên theo Mã đợt. Biểu đồ "Số sinh viên theo đợt" sẽ có dữ liệu.
+
+Bước 4 – Kiểm tra Dashboard
+  • Đăng nhập Admin → vào "Thống kê (Analytics)" (/admin/dashboard).
+  • Xem phần "Số sinh viên theo đợt thực tập": sẽ thấy cột theo từng đợt (vd: Đợt Hè 2025: 3).
+
+Cách khác (không dùng import kết quả):
+  • Sinh viên đăng nhập → Đăng ký thực tập → chọn "Đợt thực tập" (dropdown) → điền form → gửi.
+  • Mỗi lần đăng ký có chọn đợt sẽ gán internship_period_id cho sinh viên đó.
+================================================================================

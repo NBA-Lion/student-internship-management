@@ -45,11 +45,15 @@ function useProfileAction() {
         if (!response) return;
         const rawjson = await response.json();
         if (rawjson.status === "Success") {
+            // Cập nhật state từ response rồi luôn gọi lại GET profile để đồng bộ đúng dữ liệu DB (Lớp/Khoa/Ngành)
+            if (rawjson.data && typeof rawjson.data.class_name !== "undefined") {
+                setProfile(rawjson.data);
+            }
             await getMyProfile();
             if (isTable && currentClass) studentInfoAction.getStudentList(currentClass);
             setAlert({ message: "Thành công", description: "Cập nhật thông tin thành công" });
         } else {
-            setAlert({ message: "Lỗi", description: rawjson.data || rawjson.message || "Cập nhật thất bại" });
+            setAlert({ message: "Lỗi", description: rawjson.message || rawjson.data || "Cập nhật thất bại" });
         }
     }
 

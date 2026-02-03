@@ -15,6 +15,8 @@ const UserSchema = new mongoose.Schema(
       default: "student" 
     },
     phone: { type: String, default: null },           // Optional - có thể bổ sung sau
+    parent_number: { type: String, default: null },   // SĐT phụ huynh
+    address: { type: String, default: null },        // Địa chỉ liên hệ
     dob: { type: Date, default: null },               // Optional - có thể bổ sung sau
     gender: { type: String, default: null },
 
@@ -67,7 +69,11 @@ const UserSchema = new mongoose.Schema(
     admin_note: { type: String },             // Ghi chú từ Giáo vụ
 
     // === LEGACY FIELD (để tương thích) ===
-    registration_status: { type: String, default: null }  // Alias cho internship_status
+    registration_status: { type: String, default: null },  // Alias cho internship_status
+
+    // === RESET PASSWORD (Forgot Password flow) ===
+    resetPasswordToken: { type: String, default: null },
+    resetPasswordExpire: { type: Date, default: null }
   },
   { timestamps: true }
 );

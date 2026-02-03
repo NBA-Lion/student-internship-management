@@ -1,4 +1,4 @@
-const express = require("express");
+        const express = require("express");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
@@ -8,6 +8,7 @@ const User = require("../models/User");
 const Company = require("../models/Company");
 const InternshipPeriod = require("../models/InternshipPeriod");
 const { authMiddleware } = require("../middleware/auth");
+const { logActivity } = require("../services/activityService");
 
 const router = express.Router();
 
@@ -54,59 +55,452 @@ function parseExcelFile(filePath) {
   return data;
 }
 
+/** Set of normalized headers that indicate "student code" column (for finding header row). */
+function getStudentCodeNormalizedSet() {
+  const aliases = INTERNSHIP_RESULT_ALIASES.student_code;
+  return new Set(aliases.map(a => normalizeHeader(String(a))));
+}
+
+/** Parse Excel for grades (kết quả thực tập): tìm dòng header chứa cột mã SV (Mã sinh viên, MSSV, Mã SV, ...) rồi map các dòng sau. Chịu file có dòng tiêu đề phía trên. Có thể truyền filePath (string) hoặc buffer (Buffer). Returns { data, headerRowIndex }. */
+function parseExcelFileWithHeaderDetection(filePathOrBuffer) {
+  const workbook = Buffer.isBuffer(filePathOrBuffer)
+    ? XLSX.read(filePathOrBuffer, { type: "buffer" })
+    : XLSX.readFile(filePathOrBuffer);
+  const sheetName = workbook.SheetNames[0];
+  const worksheet = workbook.Sheets[sheetName];
+  const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
+  if (!rows || rows.length === 0) return { data: [], headerRowIndex: 0 };
+
+  const studentCodeNormSet = getStudentCodeNormalizedSet();
+  let headerRowIndex = -1;
+  let headerRow = null;
+
+  for (let r = 0; r < Math.min(rows.length, 10); r++) {
+    const row = rows[r];
+    if (!Array.isArray(row)) continue;
+    for (let c = 0; c < row.length; c++) {
+      const cell = row[c];
+      if (cell != null && studentCodeNormSet.has(normalizeHeader(String(cell)))) {
+        headerRowIndex = r;
+        headerRow = row.map(c => {
+          if (c == null) return "";
+          const s = String(c).replace(/^\uFEFF/, "").trim();
+          return s;
+        });
+        break;
+      }
+    }
+    if (headerRowIndex >= 0) break;
+  }
+
+  if (headerRowIndex < 0 || !headerRow || headerRow.length === 0) {
+    if (rows.length >= 2) {
+      const firstRow = rows[0];
+      const secondRow = rows[1];
+      const firstRowNonEmpty = Array.isArray(firstRow) ? firstRow.filter(c => c != null && String(c).trim() !== "").length : 0;
+      if (firstRowNonEmpty <= 1 && Array.isArray(secondRow) && secondRow.some(c => c != null && String(c).trim() !== "")) {
+        headerRowIndex = 1;
+        headerRow = secondRow.map(c => (c != null ? String(c).replace(/^\uFEFF/, "").trim() : ""));
+      }
+    }
+    if (headerRowIndex < 0 || !headerRow || headerRow.length === 0) {
+      const data = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+      return { data, headerRowIndex: 0 };
+    }
+  }
+
+  const data = [];
+  for (let r = headerRowIndex + 1; r < rows.length; r++) {
+    const raw = rows[r];
+    if (!Array.isArray(raw)) continue;
+    const obj = {};
+    for (let c = 0; c < headerRow.length; c++) {
+      let key = headerRow[c] || `col_${c}`;
+      key = key.replace(/^\uFEFF/, "").trim() || `col_${c}`;
+      obj[key] = raw[c] != null ? raw[c] : "";
+    }
+    data.push(obj);
+  }
+  return { data, headerRowIndex };
+}
+
+/** Parse Excel kết quả thực tập THEO VỊ TRÍ CỘT (không dùng tên cột): dòng 1 = header (bỏ qua), từ dòng 2: Cột A=0 Mã SV, B=1 Mã đợt, C=2 Điểm, D=3 Nhận xét. Truyền filePath (string) hoặc buffer. */
+function parseGradesByColumnIndex(filePathOrBuffer) {
+  const workbook = Buffer.isBuffer(filePathOrBuffer)
+    ? XLSX.read(filePathOrBuffer, { type: "buffer" })
+    : XLSX.readFile(filePathOrBuffer);
+  const sheetName = workbook.SheetNames[0];
+  const worksheet = workbook.Sheets[sheetName];
+  const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
+  if (!rows || rows.length < 2) return { data: [], headerRowIndex: 0 };
+  const data = [];
+  for (let r = 1; r < rows.length; r++) {
+    const raw = rows[r];
+    if (!Array.isArray(raw)) continue;
+    let student_code = raw[0] != null ? String(raw[0]).trim() : "";
+    if (!student_code) {
+      for (let j = 0; j < Math.min(raw.length, 5); j++) {
+        const v = raw[j] != null ? String(raw[j]).trim() : "";
+        if (v && !/^\d+(\.\d+)?$/.test(v) && v.length <= 30) {
+          student_code = v;
+          break;
+        }
+      }
+    }
+    const batch_code = raw[1] != null ? String(raw[1]).trim() : "";
+    const score = raw[2];
+    const comment = raw[3] != null ? String(raw[3]).trim() : "";
+    if (student_code === "" && batch_code === "" && (score === undefined || score === "") && comment === "") continue;
+    data.push({ student_code, batch_code, score, comment });
+  }
+  return { data, headerRowIndex: 0 };
+}
+
+/** Parse Excel cập nhật trạng thái THEO VỊ TRÍ CỘT: dòng 1 = header (bỏ qua), từ dòng 2: Cột A=0 Mã SV, B=1 Trạng thái. */
+function parseStatusByColumnIndex(filePathOrBuffer) {
+  const workbook = Buffer.isBuffer(filePathOrBuffer)
+    ? XLSX.read(filePathOrBuffer, { type: "buffer" })
+    : XLSX.readFile(filePathOrBuffer);
+  const sheetName = workbook.SheetNames[0];
+  const worksheet = workbook.Sheets[sheetName];
+  const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
+  if (!rows || rows.length < 2) return { data: [], headerRowIndex: 0 };
+  const data = [];
+  const validStatusesSet = new Set(["Chờ duyệt", "Đang thực tập", "Đã hoàn thành", "Từ chối", "Đã duyệt"]);
+  for (let r = 1; r < rows.length; r++) {
+    const raw = rows[r];
+    if (!Array.isArray(raw)) continue;
+    let student_code = raw[0] != null ? String(raw[0]).trim() : "";
+    if (!student_code) {
+      for (let j = 0; j < Math.min(raw.length, 5); j++) {
+        const v = raw[j] != null ? String(raw[j]).trim() : "";
+        if (v && !validStatusesSet.has(v) && v.length <= 30) {
+          student_code = v;
+          break;
+        }
+      }
+    }
+    let status = raw[1] != null ? String(raw[1]).trim() : "";
+    if (!status && raw.length > 1) {
+      for (let j = 1; j < Math.min(raw.length, 5); j++) {
+        const v = raw[j] != null ? String(raw[j]).trim() : "";
+        if (v && validStatusesSet.has(v)) {
+          status = v;
+          break;
+        }
+      }
+    }
+    if (student_code === "" && status === "") continue;
+    data.push({ student_code, status });
+  }
+  return { data, headerRowIndex: 0 };
+}
+
 // ============================================
-// HELPER: Vietnamese Header Mapping
+// PARSE THEO HEADER (hỗ trợ nhiều dòng tiêu đề, thứ tự cột bất kỳ)
 // ============================================
-const HEADER_MAPPINGS = {
-  // User/Student fields
-  "Mã sinh viên": "student_code",
-  "MSSV": "student_code",
-  "VNU-ID": "student_code",
-  "Họ tên": "full_name",
-  "Họ và tên": "full_name",
-  "Tên": "full_name",
-  "Email": "email",
-  "SĐT": "phone",
-  "Số điện thoại": "phone",
-  "Ngày sinh": "dob",
-  "Giới tính": "gender",
-  "Quê quán": "location",
-  "Username": "username",
-  "Password": "password",
-  "Vai trò": "role",
-  
-  // Lecturer fields
-  "Mã GV": "student_code",       // Use student_code as unique identifier
-  "Mã giảng viên": "student_code",
-  "Khoa": "department",
-  "Khoa/Viện": "department",
-  
-  // Company fields
-  "Tên công ty": "name",
-  "Tên doanh nghiệp": "name",
-  "Địa chỉ": "address",
-  "Email liên hệ": "email",
-  "Lĩnh vực": "field",
-  "Website": "website",
-  
-  // Internship Batch fields
-  "Mã đợt": "code",
-  "Tên đợt": "name",
-  "Ngày bắt đầu": "start_date",
-  "Ngày kết thúc": "end_date",
-  
-  // Internship Result fields
-  "Điểm thực tập": "final_grade",
-  "Điểm báo cáo": "report_score",
-  "Nhận xét": "mentor_feedback",
-  "Đánh giá": "mentor_feedback",
-  "Mã đợt": "batch_code"
+/** Parse kết quả thực tập theo tên cột: tìm dòng header (Mã SV, MSSV, VNU-ID, ...), map từng dòng. */
+function parseGradesWithHeaderDetection(filePathOrBuffer) {
+  const { data: rawRows } = parseExcelFileWithHeaderDetection(filePathOrBuffer);
+  const result = [];
+  for (const row of rawRows) {
+    const mapped = mapRowToInternshipResult(row);
+    let student_code = (mapped.student_code && String(mapped.student_code).trim()) || getFirstColumnAsStudentCode(row);
+    if (student_code) student_code = String(student_code).trim();
+    const batch_code = mapped.batch_code != null ? String(mapped.batch_code).trim() : "";
+    const score = mapped.score;
+    const comment = mapped.comment != null ? String(mapped.comment).trim() : "";
+    if (!student_code && !batch_code && (score === undefined || score === null || String(score).trim() === "") && !comment) continue;
+    result.push({ student_code: student_code || "", batch_code, score, comment });
+  }
+  return { data: result, headerRowIndex: 0 };
+}
+
+/** Parse cập nhật trạng thái theo tên cột: tìm dòng header (Mã SV, VNU-ID, Trạng thái, ...), map từng dòng. */
+const VALID_STATUSES_SET = new Set(["Chờ duyệt", "Đang thực tập", "Đã hoàn thành", "Từ chối", "Đã duyệt"]);
+
+function getFirstColumnAsStatusStudentCode(rawRow) {
+  if (!rawRow || typeof rawRow !== "object") return undefined;
+  const statusNormSet = new Set((STATUS_IMPORT_ALIASES.status || []).map(a => normalizeHeader(String(a))));
+  for (const [header, value] of Object.entries(rawRow)) {
+    const v = value != null ? String(value).trim() : "";
+    if (v === "") continue;
+    const norm = normalizeHeader(header);
+    if (statusNormSet.has(norm)) continue;
+    if (VALID_STATUSES_SET.has(v)) continue;
+    if (v.length <= 30) return v;
+  }
+  return undefined;
+}
+
+function parseStatusWithHeaderDetection(filePathOrBuffer) {
+  const { data: rawRows } = parseExcelFileWithHeaderDetection(filePathOrBuffer);
+  const result = [];
+  for (const row of rawRows) {
+    const mapped = mapRowToStatusResult(row);
+    let student_code = (mapped.student_code && String(mapped.student_code).trim()) || getFirstColumnAsStatusStudentCode(row);
+    if (student_code) student_code = String(student_code).trim();
+    let status = mapped.status != null ? String(mapped.status).trim() : "";
+    if (!student_code && !status) continue;
+    result.push({ student_code: student_code || "", status });
+  }
+  return { data: result, headerRowIndex: 0 };
+}
+
+// ============================================
+// TASK 1: SMART BACKEND COLUMN MAPPING (Flexible Headers)
+// Case-insensitive: accept any of these headers for the DB field
+// ============================================
+const SMART_ALIASES_USER = {
+  student_code: ["MSSV", "Mã SV", "Mã sinh viên", "Student Code", "VNU-ID", "ID", "Mã GV", "Mã giảng viên"],
+  full_name:     ["Họ và tên", "Họ tên", "Tên", "Full Name", "Name"],
+  email:         ["Email", "Địa chỉ Email", "Thư điện tử", "Email liên hệ"],
+  dob:           ["Ngày sinh", "Date of Birth", "DOB"],
+  phone:         ["Số điện thoại", "SĐT", "Phone", "Tel"],
+  parent_number: ["SĐT phụ huynh", "Số ĐT phụ huynh", "Phone (Parent)", "Parent Phone"],
+  address:       ["Địa chỉ", "Address", "Địa chỉ liên hệ", "Location", "Quê quán"],
+  gender:        ["Giới tính", "Gender"],
+  location:      ["Quê quán", "Location"],  // Legacy: map vào address khi build userData
+  username:      ["Username", "Tên đăng nhập"],
+  password:      ["Password", "Mật khẩu"],
+  role:          ["Vai trò", "Role"],
+  class_name:    ["Lớp", "Class", "Lớp sinh hoạt"],
+  department:    ["Khoa", "Khoa/Viện", "Faculty", "Department"],
+  faculty:       ["Khoa", "Khoa/Viện", "Faculty"],
+  university:    ["Trường", "University"],
+  major:         ["Ngành", "Major"],
 };
+
+// Flatten: for legacy mapHeaders (company, batch, etc.) we keep a single key -> field map
+const HEADER_MAPPINGS_LEGACY = {
+  "Tên công ty": "name", "Tên doanh nghiệp": "name", "Địa chỉ": "address",
+  "Email liên hệ": "email", "Lĩnh vực": "field", "Website": "website",
+  "Mã đợt": "code", "Tên đợt": "name", "Ngày bắt đầu": "start_date", "Ngày kết thúc": "end_date",
+  "batch_id": "code", "batch_code": "code", "batch_name": "name",
+  "Mã đợt thực tập": "code", "Tên đợt thực tập": "name",
+  "Điểm thực tập": "final_grade", "Điểm báo cáo": "report_score", "Nhận xét": "mentor_feedback",
+  "Đánh giá": "mentor_feedback", "Mã đợt": "batch_code",
+  "Mã sinh viên": "student_code"
+};
+
+// ============================================
+// INTERNSHIP RESULTS IMPORT: Smart column mapping (Vietnamese/English)
+// Normalized keys (lowercase, no diacritics) for flexible header matching
+// ============================================
+const INTERNSHIP_RESULT_ALIASES = {
+  student_code: [
+    "mssv", "mã sinh viên", "mã sv", "student code", "student_id", "mã số sinh viên",
+    "ma sinh vien", "ma sv", "student code", "student id", "ma so sinh vien",
+    "vnu-id", "vnu id", "VNU-ID", "mã số sv", "ma so sv"
+  ],
+  score: [
+    "điểm", "điểm thực tập", "score", "grade", "result", "điểm tổng kết",
+    "diem", "diem thuc tap", "grade", "result", "diem tong ket",
+    "final_grade", "điểm báo cáo", "diem bao cao", "report_score"
+  ],
+  comment: [
+    "nhận xét", "đánh giá", "comment", "ghi chú", "mentor_feedback",
+    "nhan xet", "danh gia", "ghi chu"
+  ],
+  batch_code: [
+    "mã đợt", "mã đợt thực tập", "batch", "batch_code", "batch_id", "period", "period_code",
+    "ma dot", "ma dot thuc tap", "period code"
+  ]
+};
+
+/** Get first value from raw row whose header (normalized) matches any alias for the given field. */
+function getValueByInternshipAlias(rawRow, fieldName) {
+  const aliases = INTERNSHIP_RESULT_ALIASES[fieldName];
+  if (!aliases || !rawRow || typeof rawRow !== "object") return undefined;
+  const normalizedAliases = new Set(aliases.map(a => normalizeHeader(String(a))));
+  for (const [header, value] of Object.entries(rawRow)) {
+    const norm = normalizeHeader(header);
+    if (normalizedAliases.has(norm)) {
+      const v = value != null ? String(value).trim() : "";
+      if (fieldName === "comment") return v;
+      return v !== "" ? v : undefined;
+    }
+  }
+  return undefined;
+}
+
+/** Normalized header sets for score/comment/batch (để fallback không nhầm cột). */
+const SCORE_COMMENT_BATCH_NORMALIZED = new Set([
+  ...(INTERNSHIP_RESULT_ALIASES.score || []).map(a => normalizeHeader(String(a))),
+  ...(INTERNSHIP_RESULT_ALIASES.comment || []).map(a => normalizeHeader(String(a))),
+  ...(INTERNSHIP_RESULT_ALIASES.batch_code || []).map(a => normalizeHeader(String(a)))
+]);
+
+/** Fallback: lấy giá trị cột đầu tiên (theo thứ tự key) không phải điểm/nhận xét/mã đợt làm mã SV. Bỏ qua giá trị thuần số (điểm). */
+function getFirstColumnAsStudentCode(rawRow) {
+  if (!rawRow || typeof rawRow !== "object") return undefined;
+  for (const [header, value] of Object.entries(rawRow)) {
+    const v = value != null ? String(value).trim() : "";
+    if (v === "") continue;
+    if (/^\d+(\.\d+)?$/.test(v)) continue; // bỏ qua số thuần (điểm)
+    const norm = normalizeHeader(header);
+    if (SCORE_COMMENT_BATCH_NORMALIZED.has(norm)) continue;
+    return v;
+  }
+  return undefined;
+}
+
+/** Map raw Excel row to normalized internship result keys using INTERNSHIP_RESULT_ALIASES. */
+function mapRowToInternshipResult(rawRow) {
+  if (!rawRow || typeof rawRow !== "object") return {};
+  const student_code = getValueByInternshipAlias(rawRow, "student_code") || getFirstColumnAsStudentCode(rawRow);
+  return {
+    student_code: student_code || undefined,
+    score: getValueByInternshipAlias(rawRow, "score"),
+    comment: getValueByInternshipAlias(rawRow, "comment"),
+    batch_code: getValueByInternshipAlias(rawRow, "batch_code")
+  };
+}
+
+// ============================================
+// STATUS IMPORT: Smart column mapping (Mã SV + Trạng thái)
+// ============================================
+const STATUS_IMPORT_ALIASES = {
+  student_code: [
+    "mssv", "mã sinh viên", "mã sv", "student code", "student_id", "mã số sinh viên",
+    "ma sinh vien", "ma sv", "student id", "ma so sinh vien",
+    "vnu-id", "vnu id", "VNU-ID", "mã số sv", "ma so sv"
+  ],
+  status: [
+    "trạng thái", "status", "tình trạng", "trạng thái thực tập", "registration_status",
+    "internship_status", "trang thai", "tinh trang", "trang thai thuc tap"
+  ]
+};
+
+function getValueByStatusAlias(rawRow, fieldName) {
+  const aliases = STATUS_IMPORT_ALIASES[fieldName];
+  if (!aliases || !rawRow || typeof rawRow !== "object") return undefined;
+  const normalizedAliases = new Set(aliases.map(a => normalizeHeader(String(a))));
+  for (const [header, value] of Object.entries(rawRow)) {
+    const norm = normalizeHeader(header);
+    if (normalizedAliases.has(norm)) {
+      const v = value != null ? String(value).trim() : "";
+      return v !== "" ? v : undefined;
+    }
+  }
+  return undefined;
+}
+
+/** Map raw Excel row to { student_code, status } for status import. */
+function mapRowToStatusResult(rawRow) {
+  if (!rawRow || typeof rawRow !== "object") return {};
+  return {
+    student_code: getValueByStatusAlias(rawRow, "student_code"),
+    status: getValueByStatusAlias(rawRow, "status")
+  };
+}
+
+/** Get value from raw row by matching any alias for the given field (case-insensitive). Returns first matching cell value (including empty string). */
+function getValueByAliases(row, fieldName) {
+  const aliases = SMART_ALIASES_USER[fieldName];
+  if (!aliases) return undefined;
+  const rowKeys = Object.keys(row);
+  for (const alias of aliases) {
+    const lower = alias.toLowerCase().trim();
+    for (const key of rowKeys) {
+      if (key != null && String(key).toLowerCase().trim() === lower) {
+        return row[key]; // may be undefined, null, "", or value
+      }
+    }
+  }
+  return undefined;
+}
+
+/** Map raw Excel row to normalized user/student fields using smart aliases. */
+function mapUserRow(row) {
+  const mapped = {};
+  for (const field of Object.keys(SMART_ALIASES_USER)) {
+    const val = getValueByAliases(row, field);
+    if (val !== undefined) mapped[field] = val;
+  }
+  return mapped;
+}
+
+// Aliases cho cột "Mã đợt" (để tìm dòng header trong file Excel đợt thực tập)
+const BATCH_CODE_NORM_SET = new Set([
+  "ma dot", "mã đợt", "ma dot thuc tap", "code", "batch", "batch_id", "batch_code",
+  "period", "period_code", "ma dot thuc tap"
+].map(a => normalizeHeaderStatic(a)));
+
+function normalizeHeaderStatic(s) {
+  if (s == null || typeof s !== "string") return "";
+  return String(s).replace(/^\uFEFF/, "").trim().toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ");
+}
+
+/** Parse Excel đợt thực tập: tìm dòng có cột "Mã đợt" làm header, hỗ trợ file có dòng tiêu đề phía trên */
+function parseExcelFileWithBatchHeaderDetection(filePathOrBuffer) {
+  const workbook = Buffer.isBuffer(filePathOrBuffer)
+    ? XLSX.read(filePathOrBuffer, { type: "buffer" })
+    : XLSX.readFile(filePathOrBuffer);
+  const sheetName = workbook.SheetNames[0];
+  const worksheet = workbook.Sheets[sheetName];
+  const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
+  if (!rows || rows.length === 0) return { data: [], headerRowIndex: 0 };
+
+  let headerRowIndex = -1;
+  let headerRow = null;
+
+  for (let r = 0; r < Math.min(rows.length, 15); r++) {
+    const row = Array.isArray(rows[r]) ? rows[r] : [];
+    for (let c = 0; c < row.length; c++) {
+      const cell = row[c];
+      if (cell != null && BATCH_CODE_NORM_SET.has(normalizeHeaderStatic(String(cell)))) {
+        headerRowIndex = r;
+        headerRow = row.map(c => (c != null ? String(c).replace(/^\uFEFF/, "").trim() : ""));
+        break;
+      }
+    }
+    if (headerRowIndex >= 0) break;
+  }
+
+  if (headerRowIndex < 0 || !headerRow || headerRow.length === 0) {
+    // Fallback: dùng dòng đầu tiên
+    headerRow = Array.isArray(rows[0]) ? rows[0].map(c => (c != null ? String(c).replace(/^\uFEFF/, "").trim() : "")) : [];
+    headerRowIndex = 0;
+  }
+
+  const data = [];
+  for (let i = headerRowIndex + 1; i < rows.length; i++) {
+    const row = Array.isArray(rows[i]) ? rows[i] : [];
+    const obj = {};
+    for (let j = 0; j < headerRow.length; j++) {
+      const h = headerRow[j];
+      if (h) obj[h] = row[j] != null ? row[j] : "";
+    }
+    if (Object.keys(obj).length > 0) data.push(obj);
+  }
+  return { data, headerRowIndex };
+}
+
+// Chuẩn hóa tiêu đề cột: trim, bỏ BOM, lowercase, bỏ dấu (để khớp khi Excel lưu khác encoding)
+function normalizeHeader(s) {
+  if (s == null || typeof s !== "string") return "";
+  return String(s)
+    .replace(/^\uFEFF/, "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ");
+}
 
 function mapHeaders(row) {
   const mapped = {};
+  const legacyByNormalized = {};
+  for (const [k, v] of Object.entries(HEADER_MAPPINGS_LEGACY)) {
+    const n = normalizeHeader(k);
+    if (!legacyByNormalized[n]) legacyByNormalized[n] = v;
+  }
   for (const [key, value] of Object.entries(row)) {
-    const mappedKey = HEADER_MAPPINGS[key] || key.toLowerCase().replace(/\s+/g, "_");
+    const exact = HEADER_MAPPINGS_LEGACY[key];
+    const byNorm = legacyByNormalized[normalizeHeader(key)];
+    const mappedKey = exact || byNorm || key.toLowerCase().replace(/\s+/g, "_");
     mapped[mappedKey] = value;
   }
   return mapped;
@@ -148,6 +542,11 @@ function parseDate(dateStr) {
 }
 
 // ============================================
+// TASK 2: Auto-email domain (configurable)
+// ============================================
+const AUTO_EMAIL_DOMAIN = process.env.IMPORT_AUTO_EMAIL_DOMAIN || "student.intern.local";
+
+// ============================================
 // POST /api/import/users - Import Students or Lecturers
 // ============================================
 router.post("/users", authMiddleware, upload.single("file"), async (req, res) => {
@@ -177,14 +576,14 @@ router.post("/users", authMiddleware, upload.single("file"), async (req, res) =>
     const bulkOps = [];
 
     for (let i = 0; i < rawData.length; i++) {
-      const row = mapHeaders(rawData[i]);
+      const row = mapUserRow(rawData[i]); // TASK 1: Smart mapping
       const rowNum = i + 2; // Excel row number (1-indexed + header)
 
       try {
-        // Validate required fields
+        // Validate required fields (student_code, full_name)
         const studentCode = row.student_code || row.username;
         const fullName = row.full_name || row.name;
-        const email = row.email;
+        let email = row.email;
 
         if (!studentCode) {
           failed.push({ ...row, error: `Dòng ${rowNum}: Thiếu mã sinh viên/giảng viên`, rowNum });
@@ -194,9 +593,14 @@ router.post("/users", authMiddleware, upload.single("file"), async (req, res) =>
           failed.push({ ...row, error: `Dòng ${rowNum}: Thiếu họ tên`, rowNum });
           continue;
         }
-        if (!email) {
-          failed.push({ ...row, error: `Dòng ${rowNum}: Thiếu email`, rowNum });
-          continue;
+
+        // TASK 2: Auto-Email — if missing or empty, generate from student_code
+        const codeStr = String(studentCode).trim();
+        if (!email || String(email).trim() === "") {
+          email = `${codeStr}@${AUTO_EMAIL_DOMAIN}`;
+          console.warn(`>>> [Import] Dòng ${rowNum}: Thiếu email → tự sinh: ${email}`);
+        } else {
+          email = String(email).trim().toLowerCase();
         }
 
         // ============================================
@@ -212,30 +616,36 @@ router.post("/users", authMiddleware, upload.single("file"), async (req, res) =>
         }
 
         // Auto-detect role based on student_code pattern
-        const codeUpper = String(studentCode).trim().toUpperCase();
+        const codeUpper = codeStr.toUpperCase();
         if (codeUpper.startsWith('SV') || codeUpper.match(/^\d{8,}$/)) {
-          // Student code pattern: SV001, 20210001, etc.
           role = 'student';
         } else if (codeUpper.startsWith('GV') || codeUpper.startsWith('LEC')) {
-          // Lecturer code pattern: GV001, LEC001
           role = 'lecturer';
         }
 
-        // Only allow 'student' or 'lecturer' from import
         if (!['student', 'lecturer'].includes(role)) {
           role = 'student';
         }
 
+        // TASK 2: Phone as string (preserve leading zeros)
+        const phoneVal = row.phone;
+        const phone = phoneVal !== undefined && phoneVal !== null && String(phoneVal).trim() !== ""
+          ? String(phoneVal).trim()
+          : undefined;
+
+        // TASK 2: Date parsing (Excel serial or dd/mm/yyyy)
+        const dobParsed = parseDate(row.dob);
+
         // Prepare user data
         const userData = {
-          student_code: String(studentCode).trim(),
+          student_code: codeStr,
           full_name: String(fullName).trim(),
-          email: String(email).trim().toLowerCase(),
-          password: row.password || defaultPassword,
-          role: role, // Sanitized role
-          phone: row.phone ? String(row.phone).trim() : undefined,
-          gender: row.gender,
-          dob: parseDate(row.dob),
+          email: email,
+          password: row.password && String(row.password).trim() !== "" ? String(row.password).trim() : defaultPassword, // TASK 2: default 123456
+          role: role,
+          phone: phone,
+          gender: row.gender ? String(row.gender).trim() : undefined,
+          dob: dobParsed,
         };
 
         // Additional fields based on role
@@ -243,22 +653,22 @@ router.post("/users", authMiddleware, upload.single("file"), async (req, res) =>
           userData.department = row.department || row.faculty;
           userData.faculty = row.department || row.faculty;
         } else {
-          // Student fields
           userData.university = row.university;
           userData.faculty = row.faculty;
           userData.major = row.major;
           userData.class_name = row.class_name;
-          userData.location = row.location;
+          userData.parent_number = row.parent_number ? String(row.parent_number).trim() : undefined;
+          userData.address = (row.address || row.location) ? String(row.address || row.location).trim() : undefined;
         }
 
-        // Clean undefined values
+        // Clean undefined / empty
         Object.keys(userData).forEach(key => {
           if (userData[key] === undefined || userData[key] === "") {
             delete userData[key];
           }
         });
 
-        // Upsert operation (by student_code for students, email for lecturers)
+        // Upsert operation
         const filter = role === "lecturer" 
           ? { email: userData.email }
           : { student_code: userData.student_code };
@@ -453,7 +863,8 @@ router.post("/batches", authMiddleware, upload.single("file"), async (req, res) 
       return res.status(400).json({ status: "Error", message: "Vui lòng upload file Excel" });
     }
 
-    const rawData = parseExcelFile(req.file.path);
+    // Hỗ trợ file Excel có dòng tiêu đề không nằm ở dòng 1 (tìm dòng chứa "Mã đợt")
+    const { data: rawData } = parseExcelFileWithBatchHeaderDetection(req.file.path);
     
     if (rawData.length === 0) {
       return res.status(400).json({ status: "Error", message: "File không có dữ liệu" });
@@ -522,6 +933,8 @@ router.post("/batches", authMiddleware, upload.single("file"), async (req, res) 
         registered.push({
           code: batchData.code,
           name: batchData.name,
+          batch_id: batchData.code,   // Alias cho bảng hiển thị (DBPortal dùng batch_id)
+          batch_name: batchData.name, // Alias cho bảng hiển thị (DBPortal dùng batch_name)
           start_date: batchData.start_date,
           end_date: batchData.end_date
         });
@@ -539,6 +952,15 @@ router.post("/batches", authMiddleware, upload.single("file"), async (req, res) 
 
     // Cleanup
     fs.unlinkSync(req.file.path);
+
+    if (registered.length > 0) {
+      await logActivity({
+        type: "import",
+        title: `Import danh sách đợt thực tập: ${registered.length} đợt.`,
+        user_id: req.user?._id,
+        meta: { count: registered.length, failed: failed.length },
+      });
+    }
 
     return res.json({
       status: failed.length === 0 ? "Success" : "Partial",
@@ -570,7 +992,7 @@ router.post("/batches", authMiddleware, upload.single("file"), async (req, res) 
 });
 
 // ============================================
-// POST /api/import/grades - Import Internship Results/Grades
+// POST /api/import/grades - Import Internship Results/Grades (Smart mapping)
 // ============================================
 router.post("/grades", authMiddleware, upload.single("file"), async (req, res) => {
   try {
@@ -582,10 +1004,18 @@ router.post("/grades", authMiddleware, upload.single("file"), async (req, res) =
       return res.status(400).json({ status: "Error", message: "Vui lòng upload file Excel" });
     }
 
-    const rawData = parseExcelFile(req.file.path);
-    
+    const fileBuffer = fs.readFileSync(req.file.path);
+    let rawData = [];
+    const byHeader = parseGradesWithHeaderDetection(fileBuffer);
+    if (byHeader.data && byHeader.data.length > 0) {
+      rawData = byHeader.data;
+    } else {
+      const byIndex = parseGradesByColumnIndex(fileBuffer);
+      rawData = byIndex.data || [];
+    }
+
     if (rawData.length === 0) {
-      return res.status(400).json({ status: "Error", message: "File không có dữ liệu" });
+      return res.status(400).json({ status: "Error", message: "File không có dữ liệu (cần ít nhất 1 dòng dữ liệu sau dòng tiêu đề). Đảm bảo có cột Mã sinh viên/MSSV/VNU-ID và Điểm/Nhận xét." });
     }
 
     const registered = [];
@@ -593,71 +1023,65 @@ router.post("/grades", authMiddleware, upload.single("file"), async (req, res) =
     const bulkOps = [];
 
     for (let i = 0; i < rawData.length; i++) {
-      const row = mapHeaders(rawData[i]);
+      const row = rawData[i];
       const rowNum = i + 2;
+      const displayRow = {
+        "Mã sinh viên": row.student_code,
+        "Mã đợt": row.batch_code,
+        "Điểm thực tập": row.score,
+        "Nhận xét": row.comment
+      };
 
       try {
-        const studentCode = row.student_code || row.vnu_id || row.mssv;
+        const studentCode = row.student_code || "";
 
         if (!studentCode) {
-          failed.push({ ...row, error: `Dòng ${rowNum}: Thiếu mã sinh viên`, rowNum });
+          failed.push({ ...displayRow, error: `Dòng ${rowNum}: Thiếu mã sinh viên`, rowNum });
           continue;
         }
 
-        // Check if student exists
-        const student = await User.findOne({ student_code: String(studentCode).trim() });
+        const student = await User.findOne({ student_code: studentCode });
         if (!student) {
-          failed.push({ ...row, error: `Dòng ${rowNum}: Không tìm thấy sinh viên ${studentCode}`, rowNum });
+          failed.push({ ...displayRow, error: `Dòng ${rowNum}: Sinh viên không tồn tại (${studentCode})`, rowNum });
           continue;
         }
 
-        // Prepare update data
         const updateData = {};
 
-        // Report score
-        if (row.report_score !== undefined && row.report_score !== "") {
-          const score = Number(row.report_score);
-          if (isNaN(score) || score < 0 || score > 10) {
-            failed.push({ ...row, error: `Dòng ${rowNum}: Điểm báo cáo phải từ 0-10`, rowNum });
-            continue;
-          }
-          updateData.report_score = score;
-        }
-
-        // Final grade
-        if (row.final_grade !== undefined && row.final_grade !== "") {
-          const grade = Number(row.final_grade);
-          if (isNaN(grade) || grade < 0 || grade > 10) {
-            failed.push({ ...row, error: `Dòng ${rowNum}: Điểm tổng kết phải từ 0-10`, rowNum });
+        if (row.score !== undefined && row.score !== null && String(row.score).trim() !== "") {
+          const grade = Number(row.score);
+          if (Number.isNaN(grade) || grade < 0 || grade > 10) {
+            failed.push({ ...displayRow, error: `Dòng ${rowNum}: Điểm phải từ 0-10`, rowNum });
             continue;
           }
           updateData.final_grade = grade;
-        }
-
-        // Mentor feedback
-        if (row.mentor_feedback) {
-          updateData.mentor_feedback = String(row.mentor_feedback).trim();
-        }
-
-        // Auto-determine final_status based on grade
-        if (updateData.final_grade !== undefined) {
-          updateData.final_status = updateData.final_grade >= 5 ? "Đạt" : "Không đạt";
-          
-          // If passed, mark internship as completed
+          updateData.final_status = grade >= 5 ? "Đạt" : "Không đạt";
           if (updateData.final_status === "Đạt") {
             updateData.internship_status = "Đã hoàn thành";
             updateData.registration_status = "Đã hoàn thành";
           }
         }
 
+        if (row.comment !== undefined && row.comment !== null && String(row.comment).trim() !== "") {
+          updateData.mentor_feedback = String(row.comment).trim();
+        }
+
+        if (row.batch_code && String(row.batch_code).trim()) {
+          const period = await InternshipPeriod.findOne({ code: String(row.batch_code).trim() }).select("_id name");
+          if (period) {
+            updateData.internship_period_id = period._id;
+            updateData.internship_period = period.name || row.batch_code;
+          }
+        }
+
         if (Object.keys(updateData).length === 0) {
-          failed.push({ ...row, error: `Dòng ${rowNum}: Không có dữ liệu để cập nhật`, rowNum });
+          failed.push({ ...displayRow, error: `Dòng ${rowNum}: Không có dữ liệu để cập nhật (điểm/nhận xét)`, rowNum });
           continue;
         }
 
         bulkOps.push({
           updateOne: {
-            filter: { student_code: String(studentCode).trim() },
+            filter: { student_code: studentCode },
             update: { $set: updateData }
           }
         });
@@ -665,30 +1089,35 @@ router.post("/grades", authMiddleware, upload.single("file"), async (req, res) =
         registered.push({
           student_code: studentCode,
           full_name: student.full_name,
-          report_score: updateData.report_score,
           final_grade: updateData.final_grade,
           final_status: updateData.final_status
         });
-
       } catch (rowError) {
-        failed.push({ ...row, error: `Dòng ${rowNum}: ${rowError.message}`, rowNum });
+        failed.push({ ...displayRow, error: `Dòng ${rowNum}: ${rowError.message}`, rowNum });
       }
     }
 
-    // Execute bulk write
     let bulkResult = null;
     if (bulkOps.length > 0) {
       bulkResult = await User.bulkWrite(bulkOps, { ordered: false });
     }
 
-    // Cleanup
     fs.unlinkSync(req.file.path);
+
+    if (registered.length > 0) {
+      await logActivity({
+        type: "import",
+        title: `Import kết quả thực tập: ${registered.length} sinh viên.`,
+        user_id: req.user?._id,
+        meta: { count: registered.length, failed: failed.length },
+      });
+    }
 
     return res.json({
       status: failed.length === 0 ? "Success" : "Partial",
       message: {
-        registered: registered,
-        failed: failed,
+        registered,
+        failed,
         summary: {
           total: rawData.length,
           success: registered.length,
@@ -697,23 +1126,15 @@ router.post("/grades", authMiddleware, upload.single("file"), async (req, res) =
         }
       }
     });
-
   } catch (error) {
     console.error(">>> [Import] Error importing grades:", error);
-    
-    if (req.file && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
-    }
-    
-    return res.status(500).json({ 
-      status: "Error", 
-      message: "Lỗi import: " + error.message 
-    });
+    if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+    return res.status(500).json({ status: "Error", message: "Lỗi import: " + error.message });
   }
 });
 
 // ============================================
-// POST /api/import/status - Import Status Updates
+// POST /api/import/status - Import Status Updates (Smart mapping, cùng logic với kết quả thực tập)
 // ============================================
 router.post("/status", authMiddleware, upload.single("file"), async (req, res) => {
   try {
@@ -725,10 +1146,18 @@ router.post("/status", authMiddleware, upload.single("file"), async (req, res) =
       return res.status(400).json({ status: "Error", message: "Vui lòng upload file Excel" });
     }
 
-    const rawData = parseExcelFile(req.file.path);
-    
+    const fileBuffer = fs.readFileSync(req.file.path);
+    let rawData = [];
+    const byHeader = parseStatusWithHeaderDetection(fileBuffer);
+    if (byHeader.data && byHeader.data.length > 0) {
+      rawData = byHeader.data;
+    } else {
+      const byIndex = parseStatusByColumnIndex(fileBuffer);
+      rawData = byIndex.data || [];
+    }
+
     if (rawData.length === 0) {
-      return res.status(400).json({ status: "Error", message: "File không có dữ liệu" });
+      return res.status(400).json({ status: "Error", message: "File không có dữ liệu (cần ít nhất 1 dòng dữ liệu sau dòng tiêu đề). Đảm bảo có cột Mã sinh viên/MSSV/VNU-ID và Trạng thái." });
     }
 
     const validStatuses = ["Chờ duyệt", "Đang thực tập", "Đã hoàn thành", "Từ chối", "Đã duyệt"];
@@ -737,46 +1166,52 @@ router.post("/status", authMiddleware, upload.single("file"), async (req, res) =
     const bulkOps = [];
 
     for (let i = 0; i < rawData.length; i++) {
-      const row = mapHeaders(rawData[i]);
+      const row = rawData[i];
       const rowNum = i + 2;
+      const displayRow = { "Mã sinh viên": row.student_code, "Trạng thái": row.status };
 
       try {
-        const studentCode = row.student_code || row.vnu_id;
-        const status = row.status;
+        const studentCode = row.student_code || "";
+        const statusRaw = row.status || "";
 
         if (!studentCode) {
-          failed.push({ ...row, error: `Dòng ${rowNum}: Thiếu mã sinh viên`, rowNum });
+          failed.push({ ...displayRow, error: `Dòng ${rowNum}: Thiếu mã sinh viên`, rowNum });
           continue;
         }
 
-        if (!status) {
-          failed.push({ ...row, error: `Dòng ${rowNum}: Thiếu trạng thái`, rowNum });
+        const student = await User.findOne({ student_code: studentCode });
+        if (!student) {
+          failed.push({ ...displayRow, error: `Dòng ${rowNum}: Sinh viên không tồn tại (${studentCode})`, rowNum });
           continue;
         }
 
-        if (!validStatuses.includes(status)) {
-          failed.push({ 
-            ...row, 
-            error: `Dòng ${rowNum}: Trạng thái không hợp lệ. Chọn: ${validStatuses.join(", ")}`, 
-            rowNum 
+        if (!statusRaw) {
+          failed.push({ ...displayRow, error: `Dòng ${rowNum}: Thiếu trạng thái`, rowNum });
+          continue;
+        }
+
+        if (!validStatuses.includes(statusRaw)) {
+          failed.push({
+            ...displayRow,
+            error: `Dòng ${rowNum}: Trạng thái không hợp lệ. Chọn: ${validStatuses.join(", ")}`,
+            rowNum
           });
           continue;
         }
 
-        // Normalize status
-        let normalizedStatus = status;
-        if (status === "Đã duyệt") {
+        let normalizedStatus = statusRaw;
+        if (statusRaw === "Đã duyệt") {
           normalizedStatus = "Đang thực tập";
         }
 
         bulkOps.push({
           updateOne: {
-            filter: { student_code: String(studentCode).trim() },
-            update: { 
-              $set: { 
+            filter: { student_code: studentCode },
+            update: {
+              $set: {
                 internship_status: normalizedStatus,
                 registration_status: normalizedStatus
-              } 
+              }
             }
           }
         });
@@ -785,26 +1220,32 @@ router.post("/status", authMiddleware, upload.single("file"), async (req, res) =
           student_code: studentCode,
           status: normalizedStatus
         });
-
       } catch (rowError) {
-        failed.push({ ...row, error: `Dòng ${rowNum}: ${rowError.message}`, rowNum });
+        failed.push({ ...displayRow, error: `Dòng ${rowNum}: ${rowError.message}`, rowNum });
       }
     }
 
-    // Execute bulk write
     let bulkResult = null;
     if (bulkOps.length > 0) {
       bulkResult = await User.bulkWrite(bulkOps, { ordered: false });
     }
 
-    // Cleanup
     fs.unlinkSync(req.file.path);
+
+    if (registered.length > 0) {
+      await logActivity({
+        type: "import",
+        title: `Cập nhật trạng thái thực tập: ${registered.length} sinh viên.`,
+        user_id: req.user?._id,
+        meta: { count: registered.length, failed: failed.length },
+      });
+    }
 
     return res.json({
       status: failed.length === 0 ? "Success" : "Partial",
       message: {
-        registered: registered,
-        failed: failed,
+        registered,
+        failed,
         summary: {
           total: rawData.length,
           success: registered.length,
@@ -813,18 +1254,10 @@ router.post("/status", authMiddleware, upload.single("file"), async (req, res) =
         }
       }
     });
-
   } catch (error) {
     console.error(">>> [Import] Error importing status:", error);
-    
-    if (req.file && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
-    }
-    
-    return res.status(500).json({ 
-      status: "Error", 
-      message: "Lỗi import: " + error.message 
-    });
+    if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+    return res.status(500).json({ status: "Error", message: "Lỗi import: " + error.message });
   }
 });
 

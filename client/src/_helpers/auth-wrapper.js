@@ -99,17 +99,24 @@ function useAuthWrapper() {
         setLoginToken("");
         localStorage.clear();
         sessionStorage.clear();
+        try { localStorage.removeItem("token"); } catch (_) {}
         
         console.log(">>> [Auth] Đăng xuất hoàn tất.");
     }
 
     // --- 3. LƯU TOKEN ---
     function setLoginToken(token) {
-        setAuth(token);
-        var now = new Date();
-        now.setTime(now.getTime() + (24 * 60 * 60 * 1000)); 
-        document.cookie = `token=${token};expires=${now.toUTCString()};path=/`;
-        console.log(">>> [Auth] Token đã lưu vào Cookie.");
+        setAuth(token || "");
+        if (token) {
+            var now = new Date();
+            now.setTime(now.getTime() + (24 * 60 * 60 * 1000));
+            document.cookie = `token=${token};expires=${now.toUTCString()};path=/`;
+            try { localStorage.setItem("token", token); } catch (_) {}
+        } else {
+            document.cookie = "token=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/;";
+            try { localStorage.removeItem("token"); } catch (_) {}
+        }
+        console.log(">>> [Auth] Token đã lưu (Cookie + localStorage).");
     }
 
     // Với backend mới, thông tin user đã được trả về ngay trong /auth/login
@@ -157,17 +164,13 @@ function useAuthWrapper() {
 
     // --- 6. QUÊN MẬT KHẨU ---
     async function forgetPassword(params) {
-        var urlencoded = new URLSearchParams();
-        urlencoded.append("email", params.email);
-        
         try {
-            let response = await fetchWrapper.post("/api/auth/forget-password", "application/x-www-form-urlencoded", urlencoded);
-            let data = await response.json();
-
+            const response = await fetchWrapper.post("/api/auth/forgot-password", "application/json", { email: params.email });
+            const data = await response.json();
             if (data.status === "Success") {
-                setAlert({ message: "Thành công", description: "Vui lòng kiểm tra email." });
+                setAlert({ message: "Thành công", description: data.message || "Vui lòng kiểm tra email." });
             } else {
-                throw new Error(data.data || "Email không tồn tại.");
+                throw new Error(data.message || data.data || "Email không tồn tại.");
             }
         } catch (e) {
             setAlert({ message: "Thất bại", description: e.message });

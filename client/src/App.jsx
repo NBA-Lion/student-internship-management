@@ -1,14 +1,13 @@
 import React, { useEffect, useState, Suspense, lazy } from 'react';
-import { BrowserRouter as Router, Switch, Route, Redirect, useParams } from 'react-router-dom';
+import { BrowserRouter as Router, Switch, Route, Redirect, useParams, useHistory } from 'react-router-dom';
 import { useRecoilState, useRecoilValue } from 'recoil';
-import { Layout, Row, Col, Spin } from 'antd';
+import { Layout, Row, Col, Spin, Modal, Button } from 'antd';
 import Title from 'antd/lib/typography/Title';
 
 import { Nav, PrivateRoute, ClassPicker } from '_components';
-import { history, } from '_helpers';
 import { Home } from 'home';
 import { useAuthWrapper, useClassWrapper } from '_helpers';
-import { authAtom, classPickerVisibleAtom, loadingVisibleAtom } from '_state';
+import { authAtom, classPickerVisibleAtom, loadingVisibleAtom, sessionExpiredAtom } from '_state';
 import { useUserActions } from '_actions';
 import { Notification } from './_components/bach_component/Notification/Notification';
 import Socket from '_components/bach_component/Socket/socket';
@@ -16,6 +15,7 @@ import LinearProgress from '@mui/material/LinearProgress';
 
 // ========== LAZY LOAD - Chỉ tải khi cần, giảm thời gian load trang đầu ==========
 const Account = lazy(() => import('_components/account/Account'));
+const ResetPasswordPage = lazy(() => import('pages/Auth/ResetPassword').then(m => ({ default: m.ResetPassword })));
 const Dashboard = lazy(() => import('_components/dashboard').then(m => ({ default: m.Dashboard })));
 const Feed = lazy(() => import('_components/feed').then(m => ({ default: m.Feed })));
 const Chat = lazy(() => import('_components/chat').then(m => ({ default: m.Chat })));
@@ -25,6 +25,7 @@ const StudentInfoList = lazy(() => import('_components/studentInfoList').then(m 
 const StudentScoreList = lazy(() => import('_components/studentScoreList').then(m => ({ default: m.StudentScoreList })));
 const PersonalScore = lazy(() => import('_components/studentScoreList').then(m => ({ default: m.PersonalScore })));
 const AdminStudents = lazy(() => import('_components/admin/AdminStudents').then(m => ({ default: m.AdminStudents })));
+const AdminDashboard = lazy(() => import('pages/admin/Dashboard').then(m => ({ default: m.default || m.AdminDashboard })));
 const DBPortal = lazy(() => import('_components/dbportal/DBPortal').then(m => ({ default: m.default })));
 const StuHome = lazy(() => import('home/StuHome').then(m => ({ default: m.StuHome })));
 const InternshipTabs = lazy(() => import('_components/internship/InternshipTabs').then(m => ({ default: m.default })));
@@ -98,7 +99,33 @@ const PageFallback = () => (
     </div>
 );
 
-const style = { };
+// Modal thông báo hết phiên đăng nhập — dùng React Router để giữ layout, không reload trang
+function SessionExpiredModal() {
+    const history = useHistory();
+    const [sessionExpired, setSessionExpired] = useRecoilState(sessionExpiredAtom);
+    const goLogin = () => {
+        const from = (sessionExpired && sessionExpired.from) ? sessionExpired.from : '';
+        localStorage.removeItem('userData');
+        localStorage.removeItem('token');
+        setSessionExpired(null);
+        history.replace('/account/login?expired=1&from=' + from);
+    };
+    return (
+        <Modal
+            title="Phiên đăng nhập đã hết hạn"
+            open={!!sessionExpired}
+            closable={false}
+            footer={[
+                <Button key="login" type="primary" onClick={goLogin}>
+                    Đăng nhập lại
+                </Button>
+            ]}
+        >
+            Phiên đăng nhập của bạn đã hết hạn. Vui lòng đăng nhập lại để tiếp tục.
+        </Modal>
+    );
+}
+
 const { Header, Content } = Layout;
 
 export { App };
@@ -122,15 +149,18 @@ function App() {
         setDrawerVisible(false);
     };
 
-    // Check if current path is auth page
-    const isAuthPage = window.location.pathname.startsWith('/account');
-
     return (
         <div className={'app-container' + (authWrapper.tokenValue ? ' bg-light' : '')}>
-            <Router history={history}>
+            <Router>
                 {authWrapper.tokenValue && <Socket></Socket>}
                 
                 <Switch>
+                    {/* Reset password - public, no layout (token in URL) */}
+                    <Route path="/reset-password/:token" render={(props) => (
+                        <Suspense fallback={<PageFallback />}>
+                            <ResetPasswordPage {...props} />
+                        </Suspense>
+                    )} />
                     {/* Auth pages - NO Layout wrapper, full screen */}
                     <Route path="/account" render={(props) => (
                         <Suspense fallback={<PageFallback />}>
@@ -144,8 +174,8 @@ function App() {
                             <Header style={{ position: 'sticky', top: 0, zIndex: 1, width: '100%' }}>
                                 <Row gutter={0}>
                                     <Col className="gutter-row" flex="1 1 500px">
-                                        <div style={style}>
-                                            <Title style={{ padding: '15px 0px 0px 0px', color: 'white' }} level={3}> Website Quản lý Sinh viên Thực tập </Title>
+                                        <div>
+                                            <Title style={{ padding: '15px 0 0 0', color: 'white' }} level={3}>Website Quản lý Sinh viên Thực tập</Title>
                                         </div>
                                     </Col>
                                     <Col style={{minWidth:"300px"}} span='auto'>
@@ -161,13 +191,14 @@ function App() {
                                 <Nav onLogout={userActions.logout} auth={authWrapper.tokenValue} userData={userData} classID={classWrapper.curClass ? (classWrapper.curClass._id || classWrapper.curClass.class_id) : ""}/>
                                 
                                 <Layout>
-                                    <Content style={{ margin: '20px 16px' }}>
+                                    <Content style={{ margin: '20px 16px', background: '#f0f2f5', minHeight: 'calc(100vh - 64px)' }}>
                                         <Suspense fallback={<PageFallback />}>
                                             <Switch>
                                                 <PrivateRoute exact path="/" component={Home} />
                                                 <PrivateRoute path="/chat" component={Chat} />
                                                 <PrivateRoute path="/profile" component={Profile} />
                                                 <PrivateRoute exact path="/dbportal" component={DBPortal} />
+                                                <PrivateRoute exact path="/admin/dashboard" component={AdminDashboard} />
                                                 <PrivateRoute exact path="/admin/students" component={AdminStudents} />
                                                 <PrivateRoute exact path="/internship" component={InternshipTabs} />
                                                 <PrivateRoute path="/:classID" component={Child} />
@@ -182,6 +213,7 @@ function App() {
                 </Switch>
             
                 <ClassPicker drawerVisible={drawerVisible} setDrawerVisible={setDrawerVisible} onDrawerClose={onDrawerClose}/>
+                <SessionExpiredModal />
                 <Notification></Notification>
                 <LinearProgress sx={{position:"fixed", width: "100%", top: "0px", zIndex:2, visibility: (loadingVisible ? "visible" : "hidden")}} />
                 
@@ -200,22 +232,19 @@ function Child() {
     let { classID } = useParams();
     const userData = JSON.parse(localStorage.getItem("userData") || "{}");
     const classWrapper = useClassWrapper();
-    const [loaded, setloaded] = useState(false);
+    const [loaded, setLoaded] = useState(false);
 
     useEffect(() => {
         if (classID) {
-            classWrapper.chooseClassById(classID).then(() => {
-                setloaded(true)
-            });
-            console.log("Child component construct, classID: ", classID)
+            classWrapper.chooseClassById(classID).then(() => setLoaded(true));
         }
-    }, [classID]); // Thêm dependency classID
+    }, [classID]);
 
     // Logic lấy ID lớp chuẩn
     const currentClassId = classWrapper.curClass ? (classWrapper.curClass._id || classWrapper.curClass.class_id) : "";
 
     return (
-    (!classWrapper.curClass && loaded) ? <Redirect from="*" to="/" /> :
+    (!classWrapper.curClass && loaded) ? <Redirect to="/" /> :
         <>
             {(classWrapper.curClass) &&  
                 <>
@@ -250,17 +279,17 @@ function Child() {
 
 function ClassNameDisplay(){
     const auth = useRecoilValue(authAtom);
+    const tokenFromStorage = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    const hasAuth = auth || tokenFromStorage;
     const userData = JSON.parse(localStorage.getItem("userData") || "{}");
-    
-    if (auth && userData) {
+
+    if (hasAuth && userData && (userData.full_name || userData.name || userData.role)) {
         const fullName = userData.full_name || userData.name || "User";
-        const role = userData.role === "admin" ? "Giáo vụ" 
-                   : userData.role === "student" ? "Sinh viên" 
+        const role = userData.role === "admin" ? "Giáo vụ"
+                   : userData.role === "student" ? "Sinh viên"
                    : "Cán bộ";
-        
-        // Format: "Hi, [Tên] ([Vai trò])"
         return `Hi, ${fullName} (${role})`;
-    }    
-    localStorage.removeItem('currentClass');
+    }
+    if (!hasAuth) localStorage.removeItem('currentClass');
     return "";
 }

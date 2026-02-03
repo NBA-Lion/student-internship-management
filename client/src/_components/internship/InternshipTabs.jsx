@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useHistory } from 'react-router-dom';
 import { useRecoilValue, useRecoilState } from 'recoil';
 import { 
-    Tabs, Card, Form, Input, DatePicker, Button, Upload, Row, Col, 
+    Tabs, Card, Form, Input, DatePicker, Button, Upload, Row, Col, Select,
     Tag, Descriptions, Alert, Spin, Timeline, Typography, Divider,
-    message, notification, Result, Empty
+    message, notification, Result, Empty, Breadcrumb
 } from 'antd';
 import {
     FormOutlined, FileSearchOutlined, CheckCircleOutlined,
@@ -70,6 +71,7 @@ const getStatusTag = (status) => {
 // MAIN COMPONENT
 // ============================================
 export default function InternshipTabs() {
+    const history = useHistory();
     const auth = useRecoilValue(authAtom);
     const [profile, setProfile] = useRecoilState(profileAtom);
     const fetchWrapper = useFetchWrapper();
@@ -80,6 +82,7 @@ export default function InternshipTabs() {
     const [submitting, setSubmitting] = useState(false);
     const [uploading, setUploading] = useState({ cv: false, letter: false });
     const [activeTab, setActiveTab] = useState('registration');
+    const [periods, setPeriods] = useState([]);
 
     // Load profile on mount
     useEffect(() => {
@@ -88,12 +91,32 @@ export default function InternshipTabs() {
         }
     }, []);
 
+    // Load danh sách đợt thực tập (cho dropdown)
+    useEffect(() => {
+        let cancelled = false;
+        async function loadPeriods() {
+            try {
+                const res = await fetchWrapper.get('/api/periods/all');
+                const json = await res.json();
+                if (cancelled) return;
+                if (json.status === 'Success' && Array.isArray(json.data)) {
+                    setPeriods(json.data);
+                }
+            } catch (e) {
+                console.warn('Không tải được danh sách đợt thực tập:', e);
+            }
+        }
+        loadPeriods();
+        return () => { cancelled = true; };
+    }, [fetchWrapper]);
+
     // Reset form when profile changes
     useEffect(() => {
         if (profile) {
             form.setFieldsValue({
                 topic: profile.internship_topic,
                 internship_unit: profile.internship_unit || profile.department,
+                period_id: profile.internship_period_id || profile.period_id || undefined,
                 start_date: profile.start_date ? moment(profile.start_date) : null,
                 end_date: profile.end_date ? moment(profile.end_date) : null,
                 mentor_name: profile.mentor_name,
@@ -145,6 +168,7 @@ export default function InternshipTabs() {
             const payload = {
                 topic: values.topic,
                 internship_unit: values.internship_unit,
+                period_id: values.period_id || null,
                 start_date: values.start_date ? values.start_date.valueOf() : null,
                 end_date: values.end_date ? values.end_date.valueOf() : null,
                 cv_url: profile?.cv_url,
@@ -216,11 +240,11 @@ export default function InternshipTabs() {
     // RENDER
     // ============================================
     return (
-        <div style={{ maxWidth: 900, margin: '0 auto', padding: 24 }}>
-            <Title level={3} style={{ marginBottom: 24 }}>
-                <FormOutlined style={{ marginRight: 8, color: '#667eea' }} />
-                Quản lý Thực tập
-            </Title>
+        <div style={{ maxWidth: 900, margin: '0 auto', padding: 24, paddingTop: 24 }}>
+            <Breadcrumb style={{ marginBottom: 20, fontSize: 13, color: '#8c8c8c' }}>
+                <Breadcrumb.Item><span style={{ cursor: 'pointer', color: '#8c8c8c' }} onClick={() => history.push('/')}>Trang chủ</span></Breadcrumb.Item>
+                <Breadcrumb.Item>Đăng ký thực tập</Breadcrumb.Item>
+            </Breadcrumb>
 
             <Tabs 
                 activeKey={activeTab} 
@@ -269,17 +293,34 @@ export default function InternshipTabs() {
                             </span>
                         } style={cardStyle}>
                             <Row gutter={24}>
-                                <Col xs={24}>
+                                <Col xs={24} md={12}>
                                     <Form.Item
-                                        label="Đề tài thực tập"
-                                        name="topic"
-                                        rules={[{ required: true, message: 'Vui lòng nhập đề tài thực tập' }]}
+                                        label="Đợt thực tập"
+                                        name="period_id"
+                                        rules={[{ required: true, message: 'Vui lòng chọn đợt thực tập' }]}
                                     >
-                                        <TextArea 
-                                            rows={2}
-                                            placeholder="VD: Xây dựng hệ thống quản lý nhân sự..."
+                                        <Select
+                                            placeholder="Chọn đợt thực tập"
+                                            allowClear
+                                            showSearch
+                                            optionFilterProp="children"
+                                            filterOption={(input, opt) =>
+                                                (opt?.children?.toString() ?? '').toLowerCase().includes(input.toLowerCase())
+                                            }
                                             disabled={isApproved}
-                                        />
+                                            notFoundContent={periods.length === 0 ? 'Chưa có đợt thực tập' : 'Không tìm thấy'}
+                                        >
+                                            {periods.map((p) => (
+                                                <Select.Option key={p._id} value={p._id}>
+                                                    {p.name || p.code || p._id}
+                                                    {p.start_date && p.end_date && (
+                                                        <span style={{ color: '#999', marginLeft: 8, fontSize: 12 }}>
+                                                            ({formatDate(p.start_date)} - {formatDate(p.end_date)})
+                                                        </span>
+                                                    )}
+                                                </Select.Option>
+                                            ))}
+                                        </Select>
                                     </Form.Item>
                                 </Col>
                                 <Col xs={24} md={12}>
@@ -295,8 +336,18 @@ export default function InternshipTabs() {
                                         />
                                     </Form.Item>
                                 </Col>
-                                <Col xs={24} md={12}>
-                                    {/* Placeholder for layout balance */}
+                                <Col xs={24}>
+                                    <Form.Item
+                                        label="Đề tài thực tập"
+                                        name="topic"
+                                        rules={[{ required: true, message: 'Vui lòng nhập đề tài thực tập' }]}
+                                    >
+                                        <TextArea 
+                                            rows={2}
+                                            placeholder="VD: Xây dựng hệ thống quản lý nhân sự..."
+                                            disabled={isApproved}
+                                        />
+                                    </Form.Item>
                                 </Col>
                                 <Col xs={24} md={12}>
                                     <Form.Item

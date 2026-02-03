@@ -1,6 +1,7 @@
 import React from 'react';
+import { useHistory } from 'react-router-dom';
 import { UploadForm } from './UploadForm';
-import { Row, Col } from 'antd';
+import { Row, Col, Breadcrumb } from 'antd';
 
 export { DBPortal };
 export default DBPortal;
@@ -99,59 +100,23 @@ var upload_form_internship_result = [
 ];
 
 // ============================================
-// STUDENT (Sinh viên) - Keep as is
+// STUDENT (Sinh viên) - Vietnamese headers, gồm SĐT phụ huynh và Địa chỉ
 // ============================================
 var upload_form_student = [
-  {
-    title: 'Ngày sinh',
-    dataIndex: 'date_of_birth',
-    key: 'date_of_birth',
-  },
-  {
-    title: 'Tên',
-    dataIndex: 'name',
-    key: 'name',
-  },
-  {
-    title: 'Vai trò',
-    dataIndex: 'role',
-    key: 'role',
-  },
-  {
-    title: 'Quê quán',
-    dataIndex: 'location',
-    key: 'location',
-  },
-  {
-    title: 'VNU-ID',
-    dataIndex: 'vnu_id',
-    key: 'vnu_id',
-  },
-  {
-    title: 'Username',
-    dataIndex: 'username',
-    key: 'username',
-  },
-  {
-    title: 'Password',
-    dataIndex: 'password',
-    key: 'password',
-  },
-  {
-    title: 'Giới tính',
-    dataIndex: 'gender',
-    key: 'gender',
-  },
-  {
-    title: 'Số điện thoại',
-    dataIndex: 'phone_number',
-    key: 'phone_number',
-  },
-  {
-    title: 'Lỗi',
-    dataIndex: 'error',
-    key: 'error',
-  },
+  { title: 'Mã sinh viên', dataIndex: 'student_code', key: 'student_code' },
+  { title: 'Họ và tên', dataIndex: 'full_name', key: 'full_name' },
+  { title: 'Email', dataIndex: 'email', key: 'email' },
+  { title: 'Ngày sinh', dataIndex: 'dob', key: 'dob' },
+  { title: 'Giới tính', dataIndex: 'gender', key: 'gender' },
+  { title: 'Số điện thoại', dataIndex: 'phone', key: 'phone' },
+  { title: 'SĐT phụ huynh', dataIndex: 'parent_number', key: 'parent_number' },
+  { title: 'Địa chỉ', dataIndex: 'address', key: 'address' },
+  { title: 'Lớp', dataIndex: 'class_name', key: 'class_name' },
+  { title: 'Quê quán', dataIndex: 'location', key: 'location' },
+  { title: 'Username', dataIndex: 'username', key: 'username' },
+  { title: 'Password', dataIndex: 'password', key: 'password' },
+  { title: 'Vai trò', dataIndex: 'role', key: 'role' },
+  { title: 'Lỗi', dataIndex: 'error', key: 'error' },
 ];
 
 // ============================================
@@ -221,15 +186,29 @@ var upload_form_status = [
   },
 ];
 function DBPortal() {
+  const history = useHistory();
   return (
-    <div className="p-4" style={{ overflow: "auto" }}>
-      <h3>🏢 Quản lý Dữ liệu Hệ thống Thực tập</h3>
-      <p style={{ color: '#666', marginBottom: 24 }}>
+    <div
+      style={{
+        overflow: "auto",
+        padding: 24,
+        paddingTop: 24,
+        minHeight: 400,
+        background: "#fff",
+        borderRadius: 8,
+        boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
+      }}
+    >
+      <Breadcrumb style={{ marginBottom: 8, fontSize: 13, color: '#8c8c8c' }}>
+        <Breadcrumb.Item><span style={{ cursor: 'pointer', color: '#8c8c8c' }} onClick={() => history.push('/')}>Trang chủ</span></Breadcrumb.Item>
+        <Breadcrumb.Item>Import dữ liệu</Breadcrumb.Item>
+      </Breadcrumb>
+      <p style={{ color: '#8c8c8c', marginBottom: 20, fontSize: 13 }}>
         Import dữ liệu sinh viên, giảng viên, doanh nghiệp và đợt thực tập vào hệ thống.
       </p>
 
       {/* ROW 1: Lecturers, Students, Companies */}
-      <Row gutter={[24, 24]}>
+      <Row gutter={[24, 24]} justify="center">
         <Col flex="320px">
           <div style={{ background: '#fafafa', padding: 16, borderRadius: 8, minHeight: 200 }}>
             <h4>👨‍🏫 Danh sách Giảng viên hướng dẫn</h4>
@@ -272,14 +251,13 @@ function DBPortal() {
             />
           </div>
         </Col>
-        <Col flex="auto"></Col>
       </Row>
 
       <br />
       <br />
 
       {/* ROW 2: Internship Batches, Results, Status */}
-      <Row gutter={[24, 24]}>
+      <Row gutter={[24, 24]} justify="center">
         <Col flex="320px">
           <div style={{ background: '#f0f5ff', padding: 16, borderRadius: 8, minHeight: 200 }}>
             <h4>📅 Danh sách Đợt thực tập</h4>
@@ -319,7 +297,6 @@ function DBPortal() {
             />
           </div>
         </Col>
-        <Col flex="auto"></Col>
       </Row>
     </div>
   );

@@ -1,201 +1,269 @@
 const express = require("express");
-const InternshipPeriod = require("../models/InternshipPeriod");
+const Period = require("../models/Period");
 const { authMiddleware } = require("../middleware/auth");
+const {
+  getAllPeriods,
+  createPeriod,
+} = require("../controllers/periodController");
 
 const router = express.Router();
 
+const PERIOD_STATUSES = ["OPEN", "CLOSED"];
+
 // Middleware kiểm tra quyền Admin
 const adminOnly = (req, res, next) => {
-  if (req.user.role !== "admin") {
-    return res.status(403).json({ status: "Error", message: "Chỉ Admin mới có quyền truy cập" });
+  if (!req.user || req.user.role !== "admin") {
+    return res
+      .status(403)
+      .json({ status: "Error", message: "Chỉ Admin mới có quyền truy cập" });
   }
   next();
 };
 
-// ============================================
-// GET /api/period/all - Lấy tất cả đợt thực tập
-// ============================================
-router.get("/all", authMiddleware, async (req, res) => {
-  try {
-    const periods = await InternshipPeriod.find()
-      .sort({ start_date: -1 })
-      .populate("created_by", "full_name student_code");
+const normalizePeriodResponse = (period) => {
+  if (!period) return null;
+  const data =
+    typeof period.toJSON === "function" ? period.toJSON() : period;
+  return {
+    _id: data._id,
+    code: data.code,
+    name: data.name,
+    startDate: data.startDate || data.start_date || null,
+    endDate: data.endDate || data.end_date || null,
+    status:
+      data.status ||
+      (data.is_active === false ? "CLOSED" : "OPEN"),
+    description: data.description,
+    maxStudents: data.maxStudents || data.max_students,
+    registrationDeadline:
+      data.registrationDeadline || data.registration_deadline,
+    createdBy: data.createdBy || data.created_by,
+    createdAt: data.createdAt,
+    updatedAt: data.updatedAt,
+  };
+};
 
-    return res.json({
-      status: "Success",
-      data: periods
-    });
-  } catch (error) {
-    console.error(">>> [Period Route] Lỗi lấy danh sách:", error.message);
-    return res.status(500).json({ status: "Error", message: "Lỗi server", error: error.message });
-  }
-});
+// RESTful GET /api/periods
+router.get("/", authMiddleware, getAllPeriods);
 
-// ============================================
-// GET /api/period/active - Lấy đợt thực tập đang mở
-// ============================================
+// Backwards compatibility for legacy frontend
+router.get("/all", authMiddleware, getAllPeriods);
+
+// GET /api/periods/active - Lấy đợt đang mở
 router.get("/active", async (req, res) => {
   try {
-    const activePeriods = await InternshipPeriod.find({ is_active: true })
-      .sort({ start_date: -1 });
+    const activePeriods = await Period.find({ status: "OPEN" })
+      .sort({ startDate: -1, endDate: -1 })
+      .lean();
 
     return res.json({
       status: "Success",
-      data: activePeriods
+      data: activePeriods.map(normalizePeriodResponse),
     });
   } catch (error) {
-    console.error(">>> [Period Route] Lỗi lấy đợt active:", error.message);
-    return res.status(500).json({ status: "Error", message: "Lỗi server", error: error.message });
+    console.error(">>> [Period Route] Lỗi lấy đợt active:", error);
+    return res
+      .status(500)
+      .json({ status: "Error", message: "Lỗi server", error: error.message });
   }
 });
 
-// ============================================
-// GET /api/period/:id - Lấy chi tiết đợt thực tập
-// ============================================
+// GET /api/periods/:id - Lấy chi tiết đợt
 router.get("/:id", authMiddleware, async (req, res) => {
   try {
-    const period = await InternshipPeriod.findById(req.params.id)
-      .populate("created_by", "full_name student_code");
+    const period = await Period.findById(req.params.id);
 
     if (!period) {
-      return res.status(404).json({ status: "Error", message: "Không tìm thấy đợt thực tập" });
+      return res
+        .status(404)
+        .json({ status: "Error", message: "Không tìm thấy đợt thực tập" });
     }
 
     return res.json({
       status: "Success",
-      data: period
+      data: normalizePeriodResponse(period),
     });
   } catch (error) {
-    console.error(">>> [Period Route] Lỗi lấy chi tiết:", error.message);
-    return res.status(500).json({ status: "Error", message: "Lỗi server", error: error.message });
+    console.error(">>> [Period Route] Lỗi lấy chi tiết:", error);
+    return res
+      .status(500)
+      .json({ status: "Error", message: "Lỗi server", error: error.message });
   }
 });
 
-// ============================================
-// POST /api/period - Tạo đợt thực tập mới (Admin only)
-// ============================================
-router.post("/", authMiddleware, adminOnly, async (req, res) => {
-  try {
-    const { name, code, start_date, end_date, description, max_students, registration_deadline } = req.body;
+// POST /api/periods - Tạo đợt mới (Admin)
+router.post("/", authMiddleware, adminOnly, createPeriod);
 
-    if (!name || !start_date || !end_date) {
-      return res.status(400).json({ 
-        status: "Error", 
-        message: "Vui lòng điền đầy đủ thông tin bắt buộc (tên, ngày bắt đầu, ngày kết thúc)" 
-      });
-    }
-
-    // Kiểm tra ngày hợp lệ
-    if (new Date(start_date) >= new Date(end_date)) {
-      return res.status(400).json({ 
-        status: "Error", 
-        message: "Ngày bắt đầu phải trước ngày kết thúc" 
-      });
-    }
-
-    const newPeriod = new InternshipPeriod({
-      name,
-      code,
-      start_date,
-      end_date,
-      description,
-      max_students: max_students || 0,
-      registration_deadline,
-      is_active: false,
-      created_by: req.user._id
-    });
-
-    await newPeriod.save();
-
-    return res.status(201).json({
-      status: "Success",
-      message: "Tạo đợt thực tập thành công",
-      data: newPeriod
-    });
-  } catch (error) {
-    console.error(">>> [Period Route] Lỗi tạo mới:", error.message);
-    return res.status(500).json({ status: "Error", message: "Lỗi server", error: error.message });
-  }
-});
-
-// ============================================
-// PUT /api/period/:id - Cập nhật đợt thực tập (Admin only)
-// ============================================
+// PUT /api/periods/:id - Cập nhật đợt (Admin)
 router.put("/:id", authMiddleware, adminOnly, async (req, res) => {
   try {
-    const { name, code, start_date, end_date, description, max_students, registration_deadline, is_active } = req.body;
-
-    const period = await InternshipPeriod.findById(req.params.id);
+    const period = await Period.findById(req.params.id);
     if (!period) {
-      return res.status(404).json({ status: "Error", message: "Không tìm thấy đợt thực tập" });
+      return res
+        .status(404)
+        .json({ status: "Error", message: "Không tìm thấy đợt thực tập" });
     }
 
-    // Cập nhật các field
-    if (name) period.name = name;
-    if (code) period.code = code;
-    if (start_date) period.start_date = start_date;
-    if (end_date) period.end_date = end_date;
-    if (description !== undefined) period.description = description;
-    if (max_students !== undefined) period.max_students = max_students;
-    if (registration_deadline !== undefined) period.registration_deadline = registration_deadline;
-    if (is_active !== undefined) period.is_active = is_active;
+    const {
+      name,
+      code,
+      startDate,
+      start_date,
+      endDate,
+      end_date,
+      description,
+      maxStudents,
+      max_students,
+      registrationDeadline,
+      registration_deadline,
+      status,
+      is_active,
+    } = req.body || {};
+
+    if (code) {
+      const normalizedCode = String(code).trim().toUpperCase();
+      if (normalizedCode !== period.code) {
+        const existed = await Period.findOne({ code: normalizedCode }).lean();
+        if (existed) {
+          return res
+            .status(409)
+            .json({ status: "Error", message: "Mã đợt đã tồn tại" });
+        }
+        period.code = normalizedCode;
+      }
+    }
+
+    if (name !== undefined) {
+      period.name = String(name).trim();
+    }
+
+    const startInput = startDate || start_date;
+    const endInput = endDate || end_date;
+
+    if (startInput) {
+      const start = new Date(startInput);
+      if (Number.isNaN(start.getTime())) {
+        return res
+          .status(400)
+          .json({ status: "Error", message: "Ngày bắt đầu không hợp lệ" });
+      }
+      period.startDate = start;
+    }
+
+    if (endInput) {
+      const end = new Date(endInput);
+      if (Number.isNaN(end.getTime())) {
+        return res
+          .status(400)
+          .json({ status: "Error", message: "Ngày kết thúc không hợp lệ" });
+      }
+      period.endDate = end;
+    }
+
+    if (period.startDate && period.endDate && period.startDate >= period.endDate) {
+      return res.status(400).json({
+        status: "Error",
+        message: "Ngày bắt đầu phải trước ngày kết thúc",
+      });
+    }
+
+    if (description !== undefined) {
+      period.description = description;
+    }
+
+    if (maxStudents !== undefined || max_students !== undefined) {
+      period.maxStudents =
+        maxStudents !== undefined ? maxStudents : max_students;
+    }
+
+    if (
+      registrationDeadline !== undefined ||
+      registration_deadline !== undefined
+    ) {
+      const deadline = registrationDeadline || registration_deadline;
+      period.registrationDeadline = deadline ? new Date(deadline) : null;
+    }
+
+    if (status !== undefined || is_active !== undefined) {
+      let incomingStatus;
+      if (typeof is_active === "boolean") {
+        incomingStatus = is_active ? "OPEN" : "CLOSED";
+      } else if (typeof status === "string") {
+        incomingStatus = status.trim().toUpperCase();
+      }
+      if (incomingStatus && !PERIOD_STATUSES.includes(incomingStatus)) {
+        return res.status(400).json({
+          status: "Error",
+          message: "Trạng thái không hợp lệ (chỉ OPEN hoặc CLOSED)",
+        });
+      }
+      if (incomingStatus) {
+        period.status = incomingStatus;
+      }
+    }
 
     await period.save();
 
     return res.json({
       status: "Success",
       message: "Cập nhật thành công",
-      data: period
+      data: normalizePeriodResponse(period),
     });
   } catch (error) {
-    console.error(">>> [Period Route] Lỗi cập nhật:", error.message);
-    return res.status(500).json({ status: "Error", message: "Lỗi server", error: error.message });
+    console.error(">>> [Period Route] Lỗi cập nhật:", error);
+    return res
+      .status(500)
+      .json({ status: "Error", message: "Lỗi server", error: error.message });
   }
 });
 
-// ============================================
-// DELETE /api/period/:id - Xóa đợt thực tập (Admin only)
-// ============================================
+// DELETE /api/periods/:id - Xóa đợt (Admin)
 router.delete("/:id", authMiddleware, adminOnly, async (req, res) => {
   try {
-    const period = await InternshipPeriod.findById(req.params.id);
+    const period = await Period.findById(req.params.id);
     if (!period) {
-      return res.status(404).json({ status: "Error", message: "Không tìm thấy đợt thực tập" });
+      return res
+        .status(404)
+        .json({ status: "Error", message: "Không tìm thấy đợt thực tập" });
     }
 
-    await InternshipPeriod.deleteOne({ _id: req.params.id });
+    await period.deleteOne();
 
     return res.json({
       status: "Success",
-      message: "Xóa đợt thực tập thành công"
+      message: "Xóa đợt thực tập thành công",
     });
   } catch (error) {
-    console.error(">>> [Period Route] Lỗi xóa:", error.message);
-    return res.status(500).json({ status: "Error", message: "Lỗi server", error: error.message });
+    console.error(">>> [Period Route] Lỗi xóa:", error);
+    return res
+      .status(500)
+      .json({ status: "Error", message: "Lỗi server", error: error.message });
   }
 });
 
-// ============================================
-// POST /api/period/:id/toggle - Bật/tắt đợt thực tập (Admin only)
-// ============================================
+// POST /api/periods/:id/toggle - Bật/tắt đợt (Admin)
 router.post("/:id/toggle", authMiddleware, adminOnly, async (req, res) => {
   try {
-    const period = await InternshipPeriod.findById(req.params.id);
+    const period = await Period.findById(req.params.id);
     if (!period) {
-      return res.status(404).json({ status: "Error", message: "Không tìm thấy đợt thực tập" });
+      return res
+        .status(404)
+        .json({ status: "Error", message: "Không tìm thấy đợt thực tập" });
     }
 
-    period.is_active = !period.is_active;
+    period.status = period.status === "OPEN" ? "CLOSED" : "OPEN";
     await period.save();
 
     return res.json({
       status: "Success",
-      message: period.is_active ? "Đã mở đợt thực tập" : "Đã đóng đợt thực tập",
-      data: period
+      message: period.status === "OPEN" ? "Đã mở đợt thực tập" : "Đã đóng đợt thực tập",
+      data: normalizePeriodResponse(period),
     });
   } catch (error) {
-    console.error(">>> [Period Route] Lỗi toggle:", error.message);
-    return res.status(500).json({ status: "Error", message: "Lỗi server", error: error.message });
+    console.error(">>> [Period Route] Lỗi toggle:", error);
+    return res
+      .status(500)
+      .json({ status: "Error", message: "Lỗi server", error: error.message });
   }
 });
 

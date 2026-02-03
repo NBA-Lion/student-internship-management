@@ -1,8 +1,14 @@
 const express = require("express");
+const bcrypt = require("bcryptjs");
 const User = require("../models/User");
 const { generateToken } = require("../middleware/auth");
+const { forgotPassword, resetPassword } = require("../controllers/authController");
 
 const router = express.Router();
+
+function isBcryptHash(str) {
+  return typeof str === "string" && str.length === 60 && str.startsWith("$2");
+}
 
 router.post("/login", async (req, res) => {
   try {
@@ -15,7 +21,13 @@ router.post("/login", async (req, res) => {
     const user = await User.findOne({
       $or: [{ student_code: loginValue }, { email: loginValue }]
     });
-    if (!user || user.password !== password) {
+    if (!user) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
+    const passwordMatch = isBcryptHash(user.password)
+      ? await bcrypt.compare(password, user.password)
+      : user.password === password;
+    if (!passwordMatch) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
@@ -46,24 +58,11 @@ router.post("/register", async (req, res) => {
   }
 });
 
-// Simple password recovery (placeholder)
-router.post("/forget-password", async (req, res) => {
-  try {
-    const { email } = req.body;
-    if (!email) {
-      return res.status(400).json({ status: "Error", data: "Email is required" });
-    }
+// Forgot password: send reset link via email (Ethereal in dev)
+router.post("/forget-password", forgotPassword);
+router.post("/forgot-password", forgotPassword); // alias
 
-    const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(404).json({ status: "Error", data: "Email không tồn tại trong hệ thống" });
-    }
-
-    // Placeholder: in real system, send email reset link here
-    return res.json({ status: "Success", data: "Vui lòng kiểm tra email để đặt lại mật khẩu" });
-  } catch (error) {
-    return res.status(500).json({ status: "Error", data: "Server error", error: error.message });
-  }
-});
+// Reset password: token + newPassword (bcrypt)
+router.post("/reset-password", resetPassword);
 
 module.exports = router;
