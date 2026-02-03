@@ -1,22 +1,14 @@
 import { Link } from 'react-router-dom';
-import { useRecoilValue, useRecoilState } from 'recoil';
-import {useEffect, useState} from 'react'
-import { authAtom } from '_state';
-import { useAuthWrapper, useClassWrapper } from '_helpers';
-import { classPickerVisibleAtom } from '_state';
-import {Redirect} from 'react-router-dom';
-import {Button, Card , Row, Col} from 'antd';
+import { useEffect, useState } from 'react';
+import { useClassWrapper } from '_helpers';
+import { Card, Row, Col } from 'antd';
 
 import {
     UserOutlined,
     MessageTwoTone,
     BellTwoTone,
     InfoCircleTwoTone,
-    AppstoreTwoTone,
-    DashboardTwoTone,
-    LayoutTwoTone,
     LeftCircleTwoTone,
-    HddTwoTone
 } from '@ant-design/icons';
 import { useUserActions } from '_actions';
 
@@ -37,18 +29,18 @@ function StuHome() {
         vnu_id: '',
     });
     
-    useEffect(() =>{
-        console.log("Reconstruct StuHome");
-        async function initStuHome(){
-            var response = await classWrapper.getCurrentClassTeacherInfo();
-            console.log(response);
-            if ("vnu_id" in response) {
+    useEffect(() => {
+        let cancelled = false;
+        async function initStuHome() {
+            const response = await classWrapper.getCurrentClassTeacherInfo();
+            if (cancelled) return;
+            if (response && "vnu_id" in response) {
                 setTeacherState(response);
             }
-            console.log(teacherState);
         }
-        initStuHome();        
-    },[]);
+        initStuHome();
+        return () => { cancelled = true; };
+    }, [classWrapper]);
 
     return (userData.role && <>
     
@@ -65,7 +57,7 @@ function StuHome() {
                                             <h5>Thông tin cá nhân</h5>
                                             <h3>{userData.name}</h3><br/>
                                             Vai trò<br/>
-                                            <h4>{userData.role == "student"? "Sinh viên" : "Cố vấn học tập"}</h4>
+                                            <h4>{userData.role === "student" ? "Sinh viên" : "Cố vấn học tập"}</h4>
                                             Lớp hiện tại<br/>
                                             <h4>{classWrapper.curClass? classWrapper.curClass.class_name : "Vui lòng chọn lớp để bắt đầu" }</h4>
                                         </Card></Link>
@@ -100,7 +92,7 @@ function StuHome() {
                                                 <h5>Thông tin Cố vấn học tập</h5>
                                                 <h3>{teacherState.name}</h3><br/>
                                                 Vai trò<br/>
-                                                <h4>{teacherState.role == "student"? "Sinh viên" : "Cố vấn học tập"}</h4>
+                                                <h4>{teacherState.role === "student" ? "Sinh viên" : "Cố vấn học tập"}</h4>
                                                 Số điện thoại<br/>
                                                 <h4>{teacherState.phone_number}</h4>
                                                 Email<br/>
