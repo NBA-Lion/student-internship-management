@@ -20,12 +20,14 @@ const activityRoutes = require("./routes/activity");
 const app = express();
 const server = http.createServer(app);
 
-// Cho phép frontend local + Vercel (deploy); FRONTEND_URL = https://xxx.vercel.app
+// Cho phép frontend local + Vercel (deploy). FRONTEND_URL có thể nhiều domain, cách nhau bởi dấu phẩy.
 const corsOrigins = [
   "http://localhost:3000",
   "http://localhost:3001",
   "http://127.0.0.1:3000",
-  ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : [])
+  ...(process.env.FRONTEND_URL
+    ? process.env.FRONTEND_URL.split(",").map((u) => u.trim()).filter(Boolean)
+    : [])
 ];
 
 const io = new Server(server, {
