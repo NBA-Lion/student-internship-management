@@ -77,13 +77,14 @@ React Router có các route như `/account/login`, `/admin/students`, … Khi us
 
 ```json
 {
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+  "routes": [
+    { "handle": "filesystem" },
+    { "src": "/.*", "dest": "/index.html" }
   ]
 }
 ```
 
-Sau khi pull/merge, chỉ cần **git push** — Vercel sẽ build lại và áp dụng rewrites.
+Cấu hình này cho phép Vercel phục vụ file tĩnh (JS/CSS) trước, chỉ những route không khớp file mới rơi vào `index.html` (tránh lỗi `Unexpected token '<'`). Sau khi pull/merge, chỉ cần **git push** — Vercel sẽ build lại và áp dụng rewrites.
 
 ---
 
