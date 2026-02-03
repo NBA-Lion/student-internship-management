@@ -3,6 +3,8 @@ import { authAtom, sessionExpiredAtom } from '_state';
 
 export { useFetchWrapper };
 
+const API_BASE = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/$/, '');
+
 function useFetchWrapper() {
     const [auth] = useRecoilState(authAtom);
     const setSessionExpired = useSetRecoilState(sessionExpiredAtom);
@@ -31,7 +33,8 @@ function useFetchWrapper() {
                     : body;
             }
 
-            return fetch(url, requestOptions).then((response) => handleResponse(response, url));
+            const finalUrl = resolveUrl(url);
+            return fetch(finalUrl, requestOptions).then((response) => handleResponse(response, finalUrl));
         }
     }
 
@@ -84,5 +87,18 @@ function useFetchWrapper() {
                 _data: data
             };
         });
+    }
+    
+    function resolveUrl(url) {
+        if (typeof url !== 'string' || url.startsWith('http')) {
+            return url;
+        }
+        if (!API_BASE) {
+            return url;
+        }
+        if (url.startsWith('/')) {
+            return `${API_BASE}${url}`;
+        }
+        return `${API_BASE}/${url}`;
     }
 }

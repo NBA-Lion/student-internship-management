@@ -37,6 +37,7 @@
   - **Name:** `REACT_APP_BACKEND_URL`  
   - **Value:** URL backend Render (vd: `https://student-internship-management.onrender.com`).
 - (Nếu build báo lỗi OpenSSL) thêm: `NODE_OPTIONS` = `--openssl-legacy-provider`.
+> ⚠️ **Bắt buộc:** Từ bản cập nhật này, mọi request từ frontend sẽ tự động gắn `REACT_APP_BACKEND_URL`. Nếu quên biến này, đăng nhập sẽ gọi nhầm sang Vercel (trả HTML) → lỗi `Unexpected token '<'` hoặc “Đăng nhập thất bại”.
 
 **Bước 4 — Deploy:**
 - Bấm **Deploy**. Đợi build và deploy xong.
@@ -99,6 +100,7 @@ Nếu backend không cho phép domain Vercel, trình duyệt sẽ chặn request
   - Nên đặt đúng URL production: `https://student-internship-management.vercel.app`
   - Nếu có thêm domain preview (URL dài của Vercel), có thể đặt nhiều URL cách nhau bằng dấu phẩy, ví dụ:  
     `https://student-internship-management.vercel.app,https://student-internship-management-git-main-xxx.vercel.app`
+- Đảm bảo **Vercel** đã có **REACT_APP_BACKEND_URL** đúng URL backend; frontend sẽ luôn gọi tới URL này (không còn dùng relative path).
 - **Save** → Render sẽ redeploy. Sau đó thử lại frontend.
 
 Backend đã hỗ trợ nhiều origin: mỗi URL trong `FRONTEND_URL` (cách nhau bởi dấu phẩy) đều được chấp nhận.
