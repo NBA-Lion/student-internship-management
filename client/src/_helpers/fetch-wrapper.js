@@ -6,6 +6,9 @@ export { useFetchWrapper };
 const API_BASE = (process.env.NODE_ENV === 'production' ? process.env.REACT_APP_BACKEND_URL : 'http://localhost:5000') || 'http://localhost:5000';
 const API_BASE_CLEAN = (API_BASE || '').replace(/\/$/, '');
 
+// Debug: kiểm tra URL API khi deploy (xóa dòng này sau khi fix xong)
+if (typeof window !== 'undefined') console.log('[API] Backend URL:', API_BASE_CLEAN || '(empty - sẽ gọi localhost!)');
+
 function useFetchWrapper() {
     const [auth] = useRecoilState(authAtom);
     const setSessionExpired = useSetRecoilState(sessionExpiredAtom);
