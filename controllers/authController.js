@@ -7,10 +7,12 @@ const User = require("../models/User");
 const { sendMail } = require("../services/emailService");
 
 const RESET_TOKEN_EXPIRE_MINUTES = 15;
-const FRONTEND_BASE = process.env.FRONTEND_BASE_URL || "http://localhost:3000";
+// FRONTEND_BASE_URL hoặc FRONTEND_URL (Render) — cần cho link reset password
+const FRONTEND_BASE = process.env.FRONTEND_BASE_URL || process.env.FRONTEND_URL?.split(",")[0]?.trim() || "http://localhost:3000";
 
 /**
  * forgotPassword: generate reset token, save to user, send email.
+ * Nếu gửi email thất bại (vd: Ethereal không chạy trên Render) → vẫn trả resetLink để user dùng (môi trường demo).
  */
 async function forgotPassword(req, res) {
   try {
@@ -42,14 +44,21 @@ async function forgotPassword(req, res) {
       <p>Nếu bạn không yêu cầu, hãy bỏ qua email này.</p>
     `;
 
-    await sendMail({ to: user.email, subject, text, html });
+    let emailSent = false;
+    try {
+      await sendMail({ to: user.email, subject, text, html });
+      emailSent = true;
+    } catch (mailErr) {
+      console.warn(">>> [AuthController] sendMail failed (Ethereal/ production?):", mailErr.message);
+    }
 
     const payload = {
       status: "Success",
-      message: "Đã gửi email hướng dẫn đặt lại mật khẩu. Vui lòng kiểm tra hộp thư.",
+      message: emailSent
+        ? "Đã gửi email hướng dẫn đặt lại mật khẩu. Vui lòng kiểm tra hộp thư."
+        : "Không gửi được email (môi trường demo). Dùng link bên dưới để đặt lại mật khẩu.",
     };
-    // Môi trường dev/test (Ethereal): trả về link để user copy, vì không có email thật
-    if (process.env.NODE_ENV !== "production") {
+    if (!emailSent || process.env.NODE_ENV !== "production") {
       payload.resetLink = resetUrl;
     }
     return res.json(payload);

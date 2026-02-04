@@ -63,6 +63,16 @@ $env:MONGODB_URI="<uri-atlas-từ-Render>"; npm run seed
 - Vercel → Environment Variables → `REACT_APP_BACKEND_URL` = URL backend Render
 - **Deployments** → **Redeploy** (build lại, không Promote)
 
+### Quên mật khẩu trả 500 / chạy lâu rồi lỗi
+
+**Triệu chứng:** Bấm "Quên mật khẩu" → "Đang gửi..." rồi báo lỗi 500.
+
+**Nguyên nhân:** Email service (Ethereal) không chạy ổn trên Render (timeout, mạng).
+
+**Đã xử lý:** Backend sẽ **không crash** khi gửi email thất bại. Thay vào đó trả về link reset ngay trên màn hình — user copy link đó vào trình duyệt để đặt lại mật khẩu.
+
+**Lưu ý:** Trên Render cần có `FRONTEND_URL` = URL Vercel để link reset đúng (vd: `https://xxx.vercel.app/reset-password/TOKEN`).
+
 ---
 
 ## Reset mật khẩu (cho người test)

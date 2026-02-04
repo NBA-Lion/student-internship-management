@@ -14,7 +14,7 @@
 
 **Environment:**
 - `MONGODB_URI` = connection string từ MongoDB Atlas
-- `FRONTEND_URL` = URL Vercel (thêm sau khi deploy frontend)
+- `FRONTEND_URL` = URL Vercel (dùng cho CORS và link reset mật khẩu)
 
 ## 2. Frontend (Vercel)
 
