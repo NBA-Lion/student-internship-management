@@ -302,6 +302,23 @@ npm install
 - Clear cache browser (Ctrl+Shift+Delete)
 - Hard reload (Ctrl+Shift+R)
 
+### ❌ Lỗi đăng nhập khi deploy (Vercel + Render)
+
+**Triệu chứng:** Trang load được nhưng khi bấm Đăng nhập thì báo lỗi ("Đăng nhập thất bại", "Không kết nối được Server", hoặc màn hình trắng).
+
+**Nguyên nhân thường gặp:**
+
+| # | Nguyên nhân | Cách kiểm tra | Cách sửa |
+|---|-------------|---------------|----------|
+| 1 | **CORS** – Backend chưa cho phép domain Vercel | F12 → Console → thấy dòng đỏ có "CORS" hoặc "blocked by CORS policy" | Vào **Render** → service backend → **Environment** → thêm/sửa `FRONTEND_URL` = URL Vercel (vd: `https://student-internship-management.vercel.app`). Nếu có nhiều URL (production + preview), dùng dấu phẩy: `https://xxx.vercel.app,https://xxx-git-main-yyy.vercel.app`. **Save** → chờ Render redeploy |
+| 2 | **Backend ngủ (cold start)** – Render free tier tắt sau ~15 phút không dùng | Đăng nhập lần đầu sau lâu không dùng → chờ 30–50 giây rồi thử lại | Đợi backend "thức" (30–50s), sau đó bấm Đăng nhập lại. Hoặc nâng cấp Render (trả phí) để tránh sleep |
+| 3 | **Sai thông tin đăng nhập** | Console không có lỗi CORS; API trả 401 | Kiểm tra lại MSSV/Email và mật khẩu. Tài khoản phải đã đăng ký trên hệ thống |
+| 4 | **Env chưa build** – Vercel chưa dùng `REACT_APP_BACKEND_URL` mới | Kiểm tra **Settings** → **Environment Variables** trên Vercel | Đảm bảo `REACT_APP_BACKEND_URL` = `https://student-internship-management.onrender.com`. Sau khi sửa env: **Deployments** → **Redeploy** (không phải chỉ "Promote") để build lại |
+
+**Cấu hình chuẩn khi deploy:**
+- **Vercel:** `REACT_APP_BACKEND_URL` = `https://student-internship-management.onrender.com`
+- **Render:** `FRONTEND_URL` = URL frontend Vercel (vd: `https://your-app.vercel.app`)
+
 ---
 
 ## 📝 Lưu ý quan trọng
