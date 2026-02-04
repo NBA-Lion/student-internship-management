@@ -164,12 +164,38 @@ function useSocketAction() {
         if (isActiveConversation) {
             const currentMessages = getRecoil(curListMessagesAtom) || [];
             
-            // Prevent duplicate messages
-            const messageExists = currentMessages.some(m => m._id === message._id);
-            
-            if (!messageExists) {
-                // CRITICAL FIX: Use functional update pattern for immediate state update
-                const newMessages = [...currentMessages, message];
+            // 1) Nếu đã có message với cùng _id thì bỏ qua
+            const existsById = currentMessages.some(m => m._id === message._id);
+
+            // 2) Nếu có tin nhắn "optimistic" tương ứng (cùng nội dung, cùng người gửi/nhận)
+            let optimisticIndex = -1;
+            if (!existsById) {
+                optimisticIndex = currentMessages.findIndex(m =>
+                    m._isOptimistic &&
+                    (m.message || m.content) === messageContent &&
+                    (m.sender === senderId || m.from?.vnu_id === senderId) &&
+                    (m.receiver === receiverId || m.to?.vnu_id === receiverId)
+                );
+            }
+
+            let newMessages = [...currentMessages];
+
+            if (existsById) {
+                console.log(">>> [Socket] Skip duplicate message by id:", message._id);
+            } else if (optimisticIndex >= 0) {
+                // Thay thế bản optimistic bằng bản server trả về
+                console.log(">>> [Socket] Replace optimistic message with confirmed one:", {
+                    optimisticIndex,
+                    messageId: message._id
+                });
+                newMessages[optimisticIndex] = {
+                    ...message,
+                    _isOptimistic: false
+                };
+                setRecoil(curListMessagesAtom, newMessages);
+            } else {
+                // Không trùng, thêm mới bình thường
+                newMessages = [...currentMessages, message];
                 setRecoil(curListMessagesAtom, newMessages);
                 
                 console.log(">>> [Socket] Added message to active conversation:", {

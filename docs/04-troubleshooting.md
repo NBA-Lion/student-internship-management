@@ -63,6 +63,17 @@ $env:MONGODB_URI="<uri-atlas-từ-Render>"; npm run seed
 - Vercel → Environment Variables → `REACT_APP_BACKEND_URL` = URL backend Render
 - **Deployments** → **Redeploy** (build lại, không Promote)
 
+### Thông tin cá nhân nhập xong không hiện trên Vercel
+**Triệu chứng:** Sửa "Thông tin cá nhân" (profile) → bấm lưu thấy thành công, nhưng sau khi reload hoặc vào lại thì dữ liệu không còn / không hiện.
+
+**Nguyên nhân:** Frontend trên Vercel chưa trỏ đúng backend. Nếu không có `REACT_APP_BACKEND_URL`, mọi request (lấy/cập nhật profile) gửi về `http://localhost:5000` — tức không tới server thật, nên dữ liệu không được lưu vào database production.
+
+**Cách xử lý:**
+1. Vercel → dự án → **Settings** → **Environment Variables**
+2. Thêm (hoặc sửa): `REACT_APP_BACKEND_URL` = URL backend (vd: `https://student-internship-management.onrender.com`) — **không** có dấu `/` ở cuối
+3. **Deployments** → **Redeploy** bản mới nhất (biến môi trường chỉ có hiệu lực sau khi build lại)
+4. Kiểm tra: mở app Vercel → đăng nhập → sửa thông tin cá nhân → lưu → F5 hoặc đăng xuất rồi vào lại, thông tin vẫn còn
+
 ### Quên mật khẩu trả 500 / chạy lâu rồi lỗi
 
 **Triệu chứng:** Bấm "Quên mật khẩu" → "Đang gửi..." rồi báo lỗi 500.

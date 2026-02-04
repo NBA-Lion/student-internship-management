@@ -28,15 +28,62 @@ function useChatAction() {
     }
 
     async function onSendMessage(content) {
-        let uInfo =  await authWrapper.getUserInfo();
-        
-        let message = 
-        {
-            to : chatWrapper.curChatPerson,
-            message: content
+        const text = (content || '').trim();
+        if (!text) return;
+
+        // Người nhận hiện tại (được set khi click vào cuộc trò chuyện)
+        const toId = chatWrapper.curChatPerson;
+        if (!toId) {
+            setAlert({ message: "Lỗi", description: "Chưa chọn người để nhắn tin" });
+            return;
         }
-        console.log(message)
-        socketWrapper.socket.emit("NewMessage", message)
+
+        // Lấy thông tin user hiện tại để build message giống server
+        let uInfo = await authWrapper.getUserInfo().catch(() => null);
+        const myId = uInfo?.student_code || uInfo?.vnu_id;
+        const myName = uInfo?.full_name || uInfo?.name || 'Tôi';
+
+        const now = new Date().toISOString();
+        const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+        // Tin nhắn "optimistic" để hiện ngay lập tức trên UI (trước khi server trả về)
+        const optimisticMessage = {
+            _id: tempId,
+            message: text,
+            type: 'text',
+            sender: myId,
+            receiver: toId,
+            from: {
+                vnu_id: myId,
+                id: myId,
+                name: myName,
+            },
+            to: {
+                vnu_id: toId,
+                id: toId,
+            },
+            createdAt: now,
+            createdDate: now,
+            selfSend: true,
+            isSender: true,
+            _isOptimistic: true, // Đánh dấu để sau này thay bằng bản từ server
+        };
+
+        // Cập nhật ngay danh sách tin nhắn của cuộc trò chuyện hiện tại
+        const currentMessages = chatWrapper.curListMessages || [];
+        chatWrapper.setCurListMessage([...currentMessages, optimisticMessage]);
+
+        // Gửi sự kiện qua Socket lên server (background)
+        if (socketWrapper.socket) {
+            socketWrapper.socket.emit("NewMessage", {
+                to: toId,
+                message: text,
+                tempId: tempId,
+            });
+        } else {
+            // Fallback: nếu socket chưa sẵn sàng, báo lỗi nhẹ
+            setAlert({ message: "Lỗi kết nối", description: "Không thể kết nối máy chủ chat. Vui lòng thử lại sau." });
+        }
     }
 
     function findContactInList(vnu_id) {
