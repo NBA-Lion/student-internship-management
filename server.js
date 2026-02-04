@@ -30,9 +30,16 @@ const corsOrigins = [
     : [])
 ];
 
+// Cho phép mọi subdomain *.vercel.app (preview + production) - tránh phải thêm từng URL mới
+function corsOriginChecker(origin, callback) {
+  if (!origin) return callback(null, true);
+  const isAllowed = corsOrigins.includes(origin) || origin.endsWith(".vercel.app");
+  callback(null, isAllowed);
+}
+
 const io = new Server(server, {
   cors: {
-    origin: corsOrigins,
+    origin: corsOriginChecker,
     methods: ["GET", "POST"],
     credentials: true
   }
@@ -41,7 +48,7 @@ const io = new Server(server, {
 app.set("io", io);
 
 app.use(cors({
-  origin: corsOrigins,
+  origin: corsOriginChecker,
   credentials: true
 }));
 app.use(express.json());
