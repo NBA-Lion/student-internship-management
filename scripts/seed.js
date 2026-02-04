@@ -4,11 +4,13 @@
  */
 
 const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const InternshipPeriod = require('../models/InternshipPeriod');
 const Company = require('../models/Company');
 
-const MONGO_URI = 'mongodb://127.0.0.1:27017/intern_system_v2';
+// Dùng MONGODB_URI từ env (Atlas/Render) hoặc fallback local
+const MONGO_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/intern_system_v2';
 
 // Dữ liệu mẫu
 const sampleUsers = [
@@ -157,14 +159,26 @@ async function seed() {
     const userCount = await User.countDocuments();
     console.log(`📊 Số users hiện tại: ${userCount}`);
 
-    if (userCount === 0) {
-      console.log('📝 Đang tạo dữ liệu mẫu...');
-      
-      // Tạo users
+    const needSeed = userCount === 0;
+    if (needSeed) console.log('📝 Đang tạo dữ liệu mẫu...');
+
+    // Luôn đảm bảo có ADMIN (quan trọng khi deploy lần đầu)
+    const adminUser = sampleUsers.find(u => u.role === 'admin');
+    const hasAdmin = await User.findOne({ student_code: adminUser.student_code });
+    if (!hasAdmin) {
+      const hash = await bcrypt.hash(adminUser.password, 10);
+      await User.create({ ...adminUser, password: hash });
+      console.log(`  ✅ Tạo user: ${adminUser.student_code} - ${adminUser.full_name}`);
+    }
+
+    if (needSeed) {
+      // Tạo các user còn lại
       for (const userData of sampleUsers) {
+        if (userData.role === 'admin') continue; // đã xử lý ở trên
         const existing = await User.findOne({ student_code: userData.student_code });
         if (!existing) {
-          await User.create(userData);
+          const hash = await bcrypt.hash(userData.password, 10);
+          await User.create({ ...userData, password: hash });
           console.log(`  ✅ Tạo user: ${userData.student_code} - ${userData.full_name}`);
         } else {
           console.log(`  ⏭️ User đã tồn tại: ${userData.student_code}`);
@@ -190,6 +204,8 @@ async function seed() {
       }
 
       console.log('\n🎉 Seed dữ liệu thành công!');
+    } else if (!hasAdmin) {
+      console.log('\n✅ Đã tạo tài khoản ADMIN (database đã có user khác).');
     } else {
       console.log('⏭️ Đã có dữ liệu, bỏ qua seed.');
       

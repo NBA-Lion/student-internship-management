@@ -319,6 +319,22 @@ npm install
 - **Vercel:** `REACT_APP_BACKEND_URL` = `https://student-internship-management.onrender.com`
 - **Render:** `FRONTEND_URL` = URL frontend Vercel (vd: `https://your-app.vercel.app`)
 
+### ❌ Lỗi 401 Unauthorized khi đăng nhập (ADMIN / SV001)
+
+**Triệu chứng:** Request tới backend thành công nhưng trả `401 (Unauthorized)` khi dùng tài khoản ADMIN hoặc SV001.
+
+**Nguyên nhân:** Database production (MongoDB Atlas) chưa có user mẫu — seed chỉ chạy trên MongoDB local.
+
+**Cách sửa:**
+1. Lấy **MONGODB_URI** từ Render → service backend → **Environment** (chuỗi kết nối MongoDB Atlas).
+2. Trên máy local, trong thư mục gốc project, chạy:
+   ```bash
+   set MONGODB_URI=<dán-uri-atlas-vào-đây> && npm run seed
+   ```
+   (Linux/Mac: `MONGODB_URI="<uri>" npm run seed`)
+3. Script sẽ tạo các user mẫu (ADMIN, SV001, SV002, ...) với mật khẩu `123` vào Atlas.
+4. Thử đăng nhập lại với **ADMIN** / **123**.
+
 ---
 
 ## 📝 Lưu ý quan trọng
