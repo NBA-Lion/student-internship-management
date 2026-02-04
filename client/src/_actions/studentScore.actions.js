@@ -15,7 +15,7 @@ function useStudentScoreAction (param) {
 
     async function getScoreList(Class){
         console.log("get student list called from studentInfo-action");
-        const response = await fetchWrapper.get(`http://localhost:5000/api/classes/${Class.class_id}/members/scores`, null, null);
+        const response = await fetchWrapper.get(`/api/classes/${Class.class_id}/members/scores`, null, null);
         if (response == null) {
             console.log("No response.");
             return null;
@@ -29,7 +29,7 @@ function useStudentScoreAction (param) {
 
     async function getScoreByID(vnu_id){
         // console.log("get score by id called from studentInfo-action");
-        const response = await fetchWrapper.get(`http://localhost:5000/api/scores/${vnu_id}`, null, null);
+        const response = await fetchWrapper.get(`/api/scores/${vnu_id}`, null, null);
         if (response == null) {
             console.log("No response.");
             return null;
@@ -40,7 +40,7 @@ function useStudentScoreAction (param) {
 
     async function getMyScore(){
         // console.log("get score by id called from studentInfo-action");
-        const response = await fetchWrapper.get(`http://localhost:5000/api/scores/me`, null, null);
+        const response = await fetchWrapper.get(`/api/scores/me`, null, null);
         if (response == null) {
             console.log("No response.");
             return null;
@@ -51,7 +51,7 @@ function useStudentScoreAction (param) {
 
     async function getSemesterByID(semesterId){
         // console.log("get semester by id called from studentInfo-action");
-        const response = await fetchWrapper.get(`http://localhost:5000/api/semesters/${semesterId}`, null, null);
+        const response = await fetchWrapper.get(`/api/semesters/${semesterId}`, null, null);
         if (response == null) {
             console.log("No response.");
             return {
@@ -66,7 +66,7 @@ function useStudentScoreAction (param) {
 
     async function getAllSemester(){
         // console.log("get semester by id called from studentInfo-action");
-        const response = await fetchWrapper.get(`http://localhost:5000/api/semesters/all`, null, null);
+        const response = await fetchWrapper.get(`/api/semesters/all`, null, null);
         if (response == null) {
             console.log("No response.");
             return [];

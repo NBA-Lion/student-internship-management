@@ -30,7 +30,7 @@ function GPADash(props) {
         async function getSemesterData(){
             var tempSem = [];
             // Backend mới trên port 5000
-            let response = await fetchWrapper.get("http://localhost:5000/api/semesters/all", null, null);
+            let response = await fetchWrapper.get("/api/semesters/all", null, null);
             response = await response.json();
             console.log(response);
             if (response?.status === "Success"){

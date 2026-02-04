@@ -5,6 +5,7 @@ import Message from '../Message';
 import moment from 'moment';
 import useChatAction from '_actions/chat.action';
 import useChatWrapper from '_helpers/chat-wrapper';
+import { API_BASE } from '_helpers/Constant';
 import { useParams } from 'react-router-dom';
 import { useRecoilValue } from 'recoil';
 import { authAtom } from '_state';
@@ -53,7 +54,7 @@ export default function MessageList(props) {
     // Fetch target user name
     async function getTargetName() {
       try {
-        const res = await axios.get('http://localhost:5000/api/profile/' + vnu_id);
+        const res = await axios.get(`${API_BASE}/api/profile/${vnu_id}`);
         setTargetName(res.data?.name || res.data?.full_name || "Người dùng");
       } catch (e) {
         console.error("Error fetching target name:", e);

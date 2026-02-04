@@ -5,6 +5,7 @@ import { Form, Input, Button, Divider} from 'antd';
 import {useClassActions, useStudentInfoAction} from '_actions';
 import { UploadForm } from '_components/dbportal/UploadForm';
 import { useClassWrapper } from '_helpers';
+import { API_BASE } from '_helpers/Constant';
 
 export {AddStudentForm} 
 var upload_form = [
@@ -78,7 +79,7 @@ function AddStudentForm(props) {
         <h6> Tải file danh sách </h6>
         <i>Thêm sinh viên vào lớp bằng file danh sách email.</i><br/>
         <i>Sinh viên được thêm vào lớp phải có tài khoản VNU được cấp bởi admin của hệ thống.</i><br/><br/>
-        <UploadForm columns={upload_form} formurl={classWrapper.curClass != null ? "http://localhost:5000/api/classes/" + classWrapper.curClass.class_id + "/members/import/" : ""}/> 
+        <UploadForm columns={upload_form} formurl={classWrapper.curClass != null ? `${API_BASE}/api/classes/${classWrapper.curClass.class_id}/members/import` : ""}/> 
         <br/><br/>
         </div>
         

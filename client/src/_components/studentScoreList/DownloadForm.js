@@ -2,6 +2,7 @@ import React ,{useEffect, useState} from 'react';
 import 'antd/dist/antd.css';
 import { Form, Input, Button, Divider, Select} from 'antd';
 import { useClassWrapper, useFetchWrapper } from '_helpers';
+import { API_BASE } from '_helpers/Constant';
 
 const {Option} = Select;
 
@@ -21,7 +22,7 @@ function DownloadForm(props) {
       async function getSemesterData(){
           var tempSem = [];
           // Backend mới trên port 5000
-          let response = await fetchWrapper.get("http://localhost:5000/api/semesters/all", null, null);
+          let response = await fetchWrapper.get("/api/semesters/all", null, null);
           response = await response.json();
           console.log(response);
           if (response?.status === "Success"){
@@ -56,7 +57,7 @@ function DownloadForm(props) {
             console.log(props.classId)
             console.log(values.semesterId);
             // Tải bảng điểm từ Backend mới (port 5000)
-            var generated = "http://localhost:5000/api/scores/download/" + props.classId + "/" + values.semesterId;
+            var generated = `${API_BASE}/api/scores/download/${props.classId}/${values.semesterId}`;
             openInNewTab(generated);
         })
     };

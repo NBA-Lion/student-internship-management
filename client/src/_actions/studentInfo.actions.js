@@ -14,7 +14,7 @@ function useStudentInfoAction (param) {
 
     async function getStudentList(Class){
         console.log("get student list called from studentInfo-action");
-        const response = await fetchWrapper.get(`http://localhost:5000/api/classes/${Class.class_id}/members/infors`, null, null);
+        const response = await fetchWrapper.get(`/api/classes/${Class.class_id}/members/infors`, null, null);
         if (response == null) {
             console.log("No response.");
             return null;
@@ -37,7 +37,7 @@ function useStudentInfoAction (param) {
         console.log('from delete Student ',Id);
         var urlencoded = new URLSearchParams();
         urlencoded.append("members", `["${Id}"]`); 
-        const response = await fetchWrapper.delete(`http://localhost:5000/api/classes/${currentClass.class_id}/members/delete`, "application/x-www-form-urlencoded", urlencoded);
+        const response = await fetchWrapper.delete(`/api/classes/${currentClass.class_id}/members/delete`, "application/x-www-form-urlencoded", urlencoded);
         if (response == null) {
             console.log("No response.");
             setAlert({message: "Lỗi", description: "Không thể xóa thành viên !"});
@@ -68,7 +68,7 @@ function useStudentInfoAction (param) {
         var urlencoded = new URLSearchParams();
         urlencoded.append("members",`[${convertedEmails}]`);
         console.log(urlencoded);
-        const response = await fetchWrapper.post(`http://localhost:5000/api/classes/${currentClass.class_id}/members/add`, "application/x-www-form-urlencoded", urlencoded);
+        const response = await fetchWrapper.post(`/api/classes/${currentClass.class_id}/members/add`, "application/x-www-form-urlencoded", urlencoded);
         if (response == null) {
             console.log("No response.");
             setAlert({message: "Lỗi", description: "Không thể thêm thành viên !"});

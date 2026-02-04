@@ -3,7 +3,8 @@ import { authAtom, sessionExpiredAtom } from '_state';
 
 export { useFetchWrapper };
 
-const API_BASE = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/$/, '');
+const API_BASE = (process.env.NODE_ENV === 'production' ? process.env.REACT_APP_BACKEND_URL : 'http://localhost:5000') || 'http://localhost:5000';
+const API_BASE_CLEAN = (API_BASE || '').replace(/\/$/, '');
 
 function useFetchWrapper() {
     const [auth] = useRecoilState(authAtom);
@@ -93,12 +94,12 @@ function useFetchWrapper() {
         if (typeof url !== 'string' || url.startsWith('http')) {
             return url;
         }
-        if (!API_BASE) {
+        if (!API_BASE_CLEAN) {
             return url;
         }
         if (url.startsWith('/')) {
-            return `${API_BASE}${url}`;
+            return `${API_BASE_CLEAN}${url}`;
         }
-        return `${API_BASE}/${url}`;
+        return `${API_BASE_CLEAN}/${url}`;
     }
 }
