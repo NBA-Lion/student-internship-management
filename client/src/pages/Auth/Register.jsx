@@ -1,3 +1,4 @@
+import { useRef, useState } from 'react';
 import { Link, useHistory } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
@@ -14,6 +15,8 @@ function Register() {
     const fetchWrapper = useFetchWrapper();
     const alertActions = useAlertActions();
     const history = useHistory();
+    const submittingRef = useRef(false);
+    const [formError, setFormError] = useState('');
 
     const validationSchema = Yup.object().shape({
         full_name: Yup.string().required('Họ và tên là bắt buộc').min(2, 'Tối thiểu 2 ký tự'),
@@ -28,6 +31,9 @@ function Register() {
     const { errors, isSubmitting } = formState;
 
     async function onSubmit(formData) {
+        if (submittingRef.current) return;
+        submittingRef.current = true;
+        setFormError('');
         try {
             const body = {
                 full_name: formData.full_name.trim(),
@@ -41,15 +47,19 @@ function Register() {
             const data = await response.json();
 
             if (data.user && data.token) {
-                alertActions.success('Đăng ký thành công! Đang chuyển hướng...');
-                setTimeout(() => {
-                    history.push('/account/login');
-                }, 1500);
+                alertActions.success('Đăng ký thành công! Vui lòng đăng nhập.');
+                history.push('/account/login');
             } else {
-                alertActions.error(data.message || 'Đăng ký thất bại.');
+                const msg = data.message || 'Đăng ký thất bại.';
+                setFormError(msg);
+                alertActions.error(msg);
             }
         } catch (error) {
-            alertActions.error('Có lỗi xảy ra. Vui lòng thử lại.');
+            const msg = (error && error.message) || (typeof error === 'string' ? error : 'Có lỗi xảy ra. Vui lòng thử lại.');
+            setFormError(msg);
+            alertActions.error(msg);
+        } finally {
+            submittingRef.current = false;
         }
     }
 
@@ -167,6 +177,12 @@ function Register() {
                             <h1>Tạo tài khoản mới</h1>
                             <p>Điền thông tin bên dưới để đăng ký</p>
                         </motion.div>
+
+                        {formError && (
+                            <div className="form-error-banner" role="alert">
+                                {formError}
+                            </div>
+                        )}
 
                         <form onSubmit={handleSubmit(onSubmit)}>
                             <motion.div 
@@ -615,6 +631,16 @@ function Register() {
                     font-size: 14px;
                     color: #64748b;
                     margin: 0;
+                }
+
+                .form-error-banner {
+                    margin-bottom: 16px;
+                    padding: 12px 14px;
+                    background: #fef2f2;
+                    border: 1px solid #fecaca;
+                    border-radius: 10px;
+                    color: #b91c1c;
+                    font-size: 13px;
                 }
 
                 .form-row {

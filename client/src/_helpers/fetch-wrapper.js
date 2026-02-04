@@ -72,8 +72,8 @@ function useFetchWrapper() {
                     return Promise.reject(new Error('Tài khoản hoặc mật khẩu không đúng'));
                 }
 
-                const error = (data && data.message) || response.statusText;
-                return Promise.reject(error);
+                const errorMsg = (data && data.message) || response.statusText || "Lỗi kết nối";
+                return Promise.reject(new Error(errorMsg));
             }
 
             // Trả về object giả lập Response với method json() trả data đã parse

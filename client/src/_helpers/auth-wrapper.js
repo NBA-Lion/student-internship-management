@@ -162,6 +162,41 @@ function useAuthWrapper() {
     }
     
 
+    /** Đăng nhập bằng token + user (sau khi đăng ký thành công), không gọi API login. */
+    function loginWithToken(user, token) {
+        if (!user || !token) return { status: "Error", data: "Thiếu user hoặc token" };
+        setLoginToken(token);
+        const userProfile = {
+            _id: user._id,
+            full_name: user.full_name,
+            email: user.email,
+            student_code: user.student_code,
+            role: user.role,
+            phone: user.phone,
+            dob: user.dob,
+            university: user.university,
+            faculty: user.faculty,
+            major: user.major,
+            internship_unit: user.internship_unit,
+            internship_topic: user.internship_topic,
+            internship_period: user.internship_period,
+            start_date: user.start_date,
+            end_date: user.end_date,
+            cv_url: user.cv_url,
+            recommendation_letter_url: user.recommendation_letter_url,
+            registration_status: user.registration_status,
+            mentor_name: user.mentor_name,
+            mentor_feedback: user.mentor_feedback,
+            final_grade: user.final_grade,
+            admin_note: user.admin_note,
+        };
+        try {
+            localStorage.setItem("userData", JSON.stringify(userProfile));
+        } catch (_) {}
+        setAlert({ message: "Đăng ký thành công", description: `Chào ${user.full_name || ""}` });
+        return { status: "Success", data: userProfile, token };
+    }
+
     // --- 6. QUÊN MẬT KHẨU ---
     async function forgetPassword(params) {
         try {
@@ -180,6 +215,7 @@ function useAuthWrapper() {
     return {
         login,
         logout,
+        loginWithToken,
         tokenValue: auth,
         getUserInfo,
         forgetPassword,
