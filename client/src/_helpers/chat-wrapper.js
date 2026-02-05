@@ -66,8 +66,22 @@ function useChatWrapper() {
                     res = await res.json();
                 }
 
+                const serverList = res.data || res.message || [];
+                const serverIds = new Set(serverList.map((m) => m._id));
+                const inConv = (m) => {
+                    const s = m.from?.vnu_id || m.sender;
+                    const r = m.to?.vnu_id || m.receiver;
+                    return (s === student_code || r === student_code);
+                };
                 setCurChatPerson(student_code);
-                setCurListMessage(res.data || res.message || []);
+                setCurListMessage((prev) => {
+                    const current = prev || [];
+                    const keep = current.filter((m) => inConv(m) && !serverIds.has(m._id));
+                    const merged = [...serverList, ...keep].sort(
+                        (a, b) => new Date(a.createdAt || a.createdDate || 0) - new Date(b.createdAt || b.createdDate || 0)
+                    );
+                    return merged;
+                });
                 clearUnreadCount(student_code);
             }
             

@@ -313,14 +313,18 @@ export default function ChatWidget() {
                 const serverList = data.data || [];
                 const serverIds = new Set(serverList.map((m) => m._id));
                 const current = stateRef.current?.currentMessages || [];
+                const inConv = (m) =>
+                    (m.sender === myStudentCode && m.receiver === userId) ||
+                    (m.receiver === myStudentCode && m.sender === userId);
                 const optimisticKeep = current.filter(
-                    (m) =>
-                        m._isOptimistic &&
-                        ((m.sender === myStudentCode && m.receiver === userId) ||
-                            (m.receiver === myStudentCode && m.sender === userId)) &&
-                        !serverIds.has(m._id)
+                    (m) => inConv(m) && m._isOptimistic && !serverIds.has(m._id)
                 );
-                const merged = [...serverList, ...optimisticKeep];
+                const realKeep = current.filter(
+                    (m) => inConv(m) && !m._isOptimistic && !serverIds.has(m._id)
+                );
+                const merged = [...serverList, ...optimisticKeep, ...realKeep].sort(
+                    (a, b) => new Date(a.createdAt || a.createdDate || 0) - new Date(b.createdAt || b.createdDate || 0)
+                );
                 dispatch({ type: 'SET_MESSAGES', payload: merged });
                 dispatch({ type: 'MARK_READ', payload: { partnerId: userId } });
             }
