@@ -208,15 +208,15 @@ io.on("connection", async (socket) => {
       // EMIT TO SPECIFIC USERS ONLY (PRIVATE CHAT)
       // ============================================
       
-      // 1. Send to RECEIVER ONLY (using their private room)
+      // 1. Send to RECEIVER: tất cả tab/thiết bị của người nhận đều nhận
       io.to(to).emit("NewMessage", {
         ...messagePayload,
         isSender: false,
         selfSend: false
       });
 
-      // 2. Send confirmation back to SENDER ONLY (their own socket)
-      socket.emit("NewMessage", {
+      // 2. Gửi xác nhận cho SENDER: dùng room của người gửi để MỌI TAB cùng user đều nhận (2 tab cùng đăng nhập vẫn thấy tin)
+      io.to(from).emit("NewMessage", {
         ...messagePayload,
         isSender: true,
         selfSend: true
