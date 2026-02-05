@@ -91,6 +91,21 @@ export default function MessageList(props) {
   }, [partnerId]);
 
   // ============================================
+  // SHORT POLLING FALLBACK (Vercel/serverless: Socket.io unreliable)
+  // Poll messages every 2s so receiver sees new messages without manual reload
+  // ============================================
+  const POLL_INTERVAL_MS = 2000;
+  useEffect(() => {
+    if (!partnerId || !fetchDone) return;
+
+    const intervalId = setInterval(() => {
+      chatAction.getCurChatMessageById(partnerId);
+    }, POLL_INTERVAL_MS);
+
+    return () => clearInterval(intervalId);
+  }, [partnerId, fetchDone]);
+
+  // ============================================
   // FILTER MESSAGES: giữa currentUserId (từ auth) và partnerId
   // ============================================
   const filteredMessages = React.useMemo(() => {

@@ -464,6 +464,23 @@ export default function ChatWidget() {
     }, [drawerOpen, auth, fetchConversations]);
 
     // ============================================
+    // SHORT POLLING FALLBACK (Vercel/serverless: Socket.io unreliable)
+    // Poll messages every 2s when a conversation is open so receiver sees new messages without reload
+    // ============================================
+    const POLL_INTERVAL_MS = 2000;
+    useEffect(() => {
+        if (!selectedUser || !drawerOpen) return;
+        const userId = selectedUser.vnu_id || selectedUser.student_code;
+        if (!userId) return;
+
+        const intervalId = setInterval(() => {
+            fetchMessages(userId);
+        }, POLL_INTERVAL_MS);
+
+        return () => clearInterval(intervalId);
+    }, [selectedUser, drawerOpen, fetchMessages]);
+
+    // ============================================
     // HANDLERS
     // ============================================
     const handleSelectUser = useCallback(async (user) => {
