@@ -6,55 +6,77 @@ import moment from 'moment';
 import useChatAction from '_actions/chat.action';
 import useChatWrapper from '_helpers/chat-wrapper';
 import { API_BASE } from '_helpers/Constant';
-import { useParams } from 'react-router-dom';
-import { useRecoilValue } from 'recoil';
-import { authAtom } from '_state';
+import { useParams, useHistory } from 'react-router-dom';
 import './MessageList.css';
 import axios from 'axios';
 
+// Mã Admin mặc định (sinh viên luôn chat với Admin)
+const DEFAULT_ADMIN_ID = 'ADMIN';
+
 export default function MessageList(props) {
-  const { vnu_id } = useParams();
+  const { vnu_id: urlParamId } = useParams();
+  const history = useHistory();
   const [fetchDone, setFetchDone] = useState(false);
   const [isHidden, setIsHidden] = useState(true);
   const [targetName, setTargetName] = useState('');
-  
+
   const messageEnd = useRef(null);
   const messageListRef = useRef(null);
-  
+
   const chatAction = useChatAction();
   const chatWrapper = useChatWrapper();
-  const auth = useRecoilValue(authAtom);
-  
-  const currentUserId = auth?.student_code || auth?.vnu_id;
-  const NOT_MY_USER_ID = vnu_id;
+
+  // CRITICAL: currentUser LUÔN lấy từ Token/Storage, KHÔNG BAO GIỜ từ URL
+  const currentUser = JSON.parse(localStorage.getItem('userData') || '{}');
+  const currentUserId = currentUser.student_code || currentUser.vnu_id;
+  const currentRole = (currentUser.role || '').toLowerCase();
+
+  // partnerId = người còn lại trong cuộc hội thoại (receiverId khi mình gửi)
+  // Admin: partnerId = id trên URL (sinh viên đang chat). Student: partnerId = Admin.
+  const [partnerId, setPartnerId] = useState(null);
+
+  useEffect(() => {
+    if (!currentUserId) return;
+
+    if (currentRole === 'admin') {
+      // Admin: id trên URL là sinh viên cần chat
+      if (urlParamId) {
+        setPartnerId(urlParamId);
+      } else {
+        setPartnerId(null);
+      }
+    } else {
+      // Student: bỏ qua id trên URL; luôn chat với Admin
+      if (urlParamId !== DEFAULT_ADMIN_ID) {
+        history.replace(`/chat/${DEFAULT_ADMIN_ID}`);
+        return;
+      }
+      setPartnerId(DEFAULT_ADMIN_ID);
+    }
+  }, [currentUserId, currentRole, urlParamId, history]);
 
   // ============================================
-  // LOAD CONVERSATION WHEN vnu_id CHANGES
+  // LOAD CONVERSATION WHEN partnerId (đúng role) THAY ĐỔI
   // ============================================
   useEffect(() => {
-    if (!vnu_id) return;
+    if (!partnerId) return;
 
     setIsHidden(true);
     setFetchDone(false);
 
-    // Set active conversation FIRST
-    chatWrapper.setCurChatPerson(vnu_id);
-    
-    // Clear unread count when opening conversation
-    chatWrapper.clearUnreadCount(vnu_id);
+    chatWrapper.setCurChatPerson(partnerId);
+    chatWrapper.clearUnreadCount(partnerId);
 
-    // Add contact and load messages
-    chatAction.addContactToList({ vnu_id }).then(() => {
-      chatAction.getCurChatMessageById(vnu_id).then(() => {
+    chatAction.addContactToList({ vnu_id: partnerId }).then(() => {
+      chatAction.getCurChatMessageById(partnerId).then(() => {
         setFetchDone(true);
         setIsHidden(false);
       });
     });
 
-    // Fetch target user name
     async function getTargetName() {
       try {
-        const res = await axios.get(`${API_BASE}/api/profile/${vnu_id}`);
+        const res = await axios.get(`${API_BASE}/api/profile/${partnerId}`);
         setTargetName(res.data?.name || res.data?.full_name || "Người dùng");
       } catch (e) {
         console.error("Error fetching target name:", e);
@@ -63,28 +85,23 @@ export default function MessageList(props) {
     }
     getTargetName();
 
-    // Cleanup: clear active conversation on unmount
     return () => {
       chatWrapper.setCurChatPerson(null);
     };
-  }, [vnu_id]);
+  }, [partnerId]);
 
   // ============================================
-  // FILTER MESSAGES FOR CURRENT CONVERSATION ONLY
-  // Prevent "ghost messages" from other users
+  // FILTER MESSAGES: giữa currentUserId (từ auth) và partnerId
   // ============================================
   const filteredMessages = React.useMemo(() => {
-    if (!fetchDone || !chatWrapper.curListMessages) return [];
-    
+    if (!fetchDone || !chatWrapper.curListMessages || !currentUserId || !partnerId) return [];
+
     return chatWrapper.curListMessages.filter(msg => {
       const senderId = msg.from?.vnu_id || msg.sender;
       const receiverId = msg.to?.vnu_id || msg.receiver;
-      
-      // Message must be between current user and the target user
-      const isRelevant = 
-        (senderId === currentUserId && receiverId === vnu_id) ||
-        (senderId === vnu_id && receiverId === currentUserId);
-      
+      const isRelevant =
+        (senderId === currentUserId && receiverId === partnerId) ||
+        (senderId === partnerId && receiverId === currentUserId);
       return isRelevant;
     }).map(result => ({
       id: result._id,
@@ -92,7 +109,7 @@ export default function MessageList(props) {
       message: result.message || result.content,
       timestamp: new Date(result.createdDate || result.createdAt || result.timestamp)
     }));
-  }, [chatWrapper.curListMessages, fetchDone, currentUserId, vnu_id]);
+  }, [chatWrapper.curListMessages, fetchDone, currentUserId, partnerId]);
 
   // ============================================
   // AUTO-SCROLL TO BOTTOM ON NEW MESSAGES
@@ -112,12 +129,12 @@ export default function MessageList(props) {
   const renderMessages = () => {
     const messages = filteredMessages;
     let tempMessages = [];
-    
+
     for (let i = 0; i < messages.length; i++) {
       const previous = messages[i - 1];
       const current = messages[i];
       const next = messages[i + 1];
-      const isMine = current.author !== NOT_MY_USER_ID;
+      const isMine = current.author === currentUserId;
       const currentMoment = moment(current.timestamp);
       
       let prevBySameAuthor = false;

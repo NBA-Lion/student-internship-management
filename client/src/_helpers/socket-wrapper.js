@@ -1,10 +1,11 @@
 import { io } from "socket.io-client";
 
-const BACKEND_URL = (process.env.NODE_ENV === 'production' ? process.env.REACT_APP_BACKEND_URL : 'http://localhost:5000') || 'http://localhost:5000';
+// Production: dùng REACT_APP_BACKEND_URL (Render). Trên Vercel cần set biến này khi build.
+const SOCKET_URL = (process.env.NODE_ENV === 'production'
+    ? (process.env.REACT_APP_BACKEND_URL || 'https://student-internship-management.onrender.com')
+    : 'http://localhost:5000').replace(/\/$/, '');
 
 class socketWrapper {
-    // Đã xóa constructor thừa
-
     static isConnected = false;
     static feeder;
     static initiated = false;
@@ -12,20 +13,14 @@ class socketWrapper {
 
     static initConnection(token) {
         if (!token) return;
-        
-        // console.log(">>> [Socket] Đang khởi tạo kết nối...");
-        
+
         if (!socketWrapper.initiated) {
-            // Kết nối tới Backend mới (port 5000)
-            socketWrapper.socket = io(BACKEND_URL, {
+            socketWrapper.socket = io(SOCKET_URL, {
                 reconnectionDelayMax: 10000,
-                auth: {
-                    token: token
-                },
-                query: {
-                    token: token
-                },
-                transports: ['websocket', 'polling'] // Ưu tiên websocket
+                auth: { token },
+                query: { token },
+                transports: ['websocket'],
+                withCredentials: true
             });
 
             socketWrapper.initiated = true;
