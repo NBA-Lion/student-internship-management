@@ -7,6 +7,7 @@ import Title from 'antd/lib/typography/Title';
 import { Nav, PrivateRoute, ClassPicker } from '_components';
 import { Home } from 'home';
 import { useAuthWrapper, useClassWrapper } from '_helpers';
+import { clearAuth, getUserData } from '_helpers/auth-storage';
 import { authAtom, classPickerVisibleAtom, loadingVisibleAtom, sessionExpiredAtom } from '_state';
 import { useUserActions } from '_actions';
 import { Notification } from './_components/bach_component/Notification/Notification';
@@ -105,8 +106,7 @@ function SessionExpiredModal() {
     const [sessionExpired, setSessionExpired] = useRecoilState(sessionExpiredAtom);
     const goLogin = () => {
         const from = (sessionExpired && sessionExpired.from) ? sessionExpired.from : '';
-        localStorage.removeItem('userData');
-        localStorage.removeItem('token');
+        clearAuth();
         setSessionExpired(null);
         history.replace('/account/login?expired=1&from=' + from);
     };
@@ -136,8 +136,7 @@ function App() {
     const [drawerVisible, setDrawerVisible] = useRecoilState(classPickerVisibleAtom);
     const [loadingVisible] = useRecoilState(loadingVisibleAtom);
 
-    // Lấy thông tin user an toàn hơn
-    const userData = JSON.parse(localStorage.getItem("userData") || "{}");
+    const userData = getUserData();
     
     const userActions = useUserActions();
     const showDrawer = () => {
@@ -230,7 +229,7 @@ function App() {
 
 function Child() {
     let { classID } = useParams();
-    const userData = JSON.parse(localStorage.getItem("userData") || "{}");
+    const userData = getUserData();
     const classWrapper = useClassWrapper();
     const [loaded, setLoaded] = useState(false);
 
@@ -279,9 +278,8 @@ function Child() {
 
 function ClassNameDisplay(){
     const auth = useRecoilValue(authAtom);
-    const tokenFromStorage = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-    const hasAuth = auth || tokenFromStorage;
-    const userData = JSON.parse(localStorage.getItem("userData") || "{}");
+    const userData = getUserData();
+    const hasAuth = auth && (userData.full_name || userData.name || userData.role);
 
     if (hasAuth && userData && (userData.full_name || userData.name || userData.role)) {
         const fullName = userData.full_name || userData.name || "User";
@@ -290,6 +288,8 @@ function ClassNameDisplay(){
                    : "Cán bộ";
         return `Hi, ${fullName} (${role})`;
     }
-    if (!hasAuth) localStorage.removeItem('currentClass');
+    if (!auth) {
+        try { localStorage.removeItem('currentClass'); } catch (_) {}
+    }
     return "";
 }

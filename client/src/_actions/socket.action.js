@@ -3,6 +3,7 @@ import { alertBachAtom } from '../_state/alert_bach';
 import useChatWrapper from '_helpers/chat-wrapper';
 import { useAuthWrapper } from '_helpers';
 import { socketWrapper } from '_helpers/socket-wrapper';
+import { getUserData } from '_helpers/auth-storage';
 import { feedPageAtom } from '_state/feed_page';
 import { getRecoil, setRecoil } from "recoil-nexus";
 import { useFeedPageWrapper } from '_helpers/feed_page_wrapper';
@@ -114,7 +115,7 @@ function useSocketAction() {
         // authAtom only contains JWT token, NOT user data
         // We must get user data from localStorage
         // ============================================
-        const userData = JSON.parse(localStorage.getItem('userData') || '{}');
+        const userData = getUserData();
         const currentUserId = userData?.student_code || userData?.vnu_id;
 
         // ============================================

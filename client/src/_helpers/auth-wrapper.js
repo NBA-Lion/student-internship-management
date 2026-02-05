@@ -1,16 +1,22 @@
+import { useEffect } from 'react';
 import { authAtom } from '_state';
 import { useRecoilState } from 'recoil';
 import { useFetchWrapper } from '_helpers';
-import { useProfileAction } from '_actions'; // Đã bỏ useAlertActions thừa
+import { useProfileAction } from '_actions';
 import { alertBachAtom } from '_state';
 import { socketWrapper } from '_helpers/socket-wrapper';
 import { clearNotificationQueue } from '_actions/socket.action';
+import { getToken, setToken, setUserData, clearAuth, getUserData } from '_helpers/auth-storage';
 
 export { useAuthWrapper };
 
 function useAuthWrapper() {
-    // console.log("Init Auth Wrapper");
     const [auth, setAuth] = useRecoilState(authAtom);
+
+    // Khi mount/reload: luôn lấy token từ sessionStorage của tab này → đúng role
+    useEffect(() => {
+        setAuth(getToken());
+    }, []);
     
     // SỬA LỖI 1: Bỏ biến 'alert' thừa, chỉ lấy setAlert
     // Dấu phẩy ở đầu nghĩa là bỏ qua phần tử đầu tiên của mảng
@@ -39,7 +45,7 @@ function useAuthWrapper() {
         const { user, token } = rawjson || {};
 
         if (user && token) {
-            // 1. Lưu token (Recoil + cookie)
+            // 1. Lưu token (Recoil + sessionStorage theo tab)
             setLoginToken(token);
 
             // 2. Chuẩn hóa dữ liệu user và lưu vào localStorage
@@ -68,7 +74,7 @@ function useAuthWrapper() {
                 admin_note: user.admin_note,
             };
 
-            localStorage.setItem("userData", JSON.stringify(userProfile));
+            setUserData(userProfile);
             setAlert({ message: "Đăng nhập thành công", description: `Chào ${user.full_name || ""}` });
 
             // Trả về format mà tầng trên đang dùng
@@ -95,54 +101,35 @@ function useAuthWrapper() {
             socketWrapper.isConnected = false;
         }
         
-        // 3. Clear token and storage
+        // 3. Clear token and storage (theo tab)
         setLoginToken("");
-        localStorage.clear();
-        sessionStorage.clear();
-        try { localStorage.removeItem("token"); } catch (_) {}
-        
+        clearAuth();
+
         console.log(">>> [Auth] Đăng xuất hoàn tất.");
     }
 
-    // --- 3. LƯU TOKEN ---
+    // --- 3. LƯU TOKEN (theo tab: sessionStorage) ---
     function setLoginToken(token) {
         setAuth(token || "");
-        if (token) {
-            var now = new Date();
-            now.setTime(now.getTime() + (24 * 60 * 60 * 1000));
-            document.cookie = `token=${token};expires=${now.toUTCString()};path=/`;
-            try { localStorage.setItem("token", token); } catch (_) {}
-        } else {
-            document.cookie = "token=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/;";
-            try { localStorage.removeItem("token"); } catch (_) {}
-        }
-        console.log(">>> [Auth] Token đã lưu (Cookie + localStorage).");
+        setToken(token || "");
+        console.log(">>> [Auth] Token đã lưu (sessionStorage).");
     }
 
-    // Với backend mới, thông tin user đã được trả về ngay trong /auth/login
-    // nên loadUser chỉ cần đọc lại từ localStorage nếu có.
     async function loadUser() {
         try {
-            const stored = localStorage.getItem("userData");
-            if (!stored) return null;
-            const userProfile = JSON.parse(stored);
-            return userProfile;
+            const userProfile = getUserData();
+            return (userProfile && (userProfile.student_code || userProfile._id)) ? userProfile : null;
         } catch (error) {
-            console.error(">>> [Lỗi] Không tải được thông tin User từ localStorage:", error);
+            console.error(">>> [Lỗi] Không tải được thông tin User:", error);
             return null;
         }
     }
 
-    // --- 5. LẤY THÔNG TIN TỪ BỘ NHỚ ---
     async function getUserInfo() {
-        let data = JSON.parse(localStorage.getItem("userData"));
-        if (data && data.student_code) { 
-            return data;
-        } else {
-            await loadUser();
-            return JSON.parse(localStorage.getItem("userData"));
-        }
-
+        const data = getUserData();
+        if (data && (data.student_code || data._id)) return data;
+        await loadUser();
+        return getUserData();
     }
 
     function loadLoginToken() {
@@ -190,9 +177,7 @@ function useAuthWrapper() {
             final_grade: user.final_grade,
             admin_note: user.admin_note,
         };
-        try {
-            localStorage.setItem("userData", JSON.stringify(userProfile));
-        } catch (_) {}
+        try { setUserData(userProfile); } catch (_) {}
         setAlert({ message: "Đăng ký thành công", description: `Chào ${user.full_name || ""}` });
         return { status: "Success", data: userProfile, token };
     }

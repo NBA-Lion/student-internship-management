@@ -6,6 +6,7 @@ import moment from 'moment';
 import useChatAction from '_actions/chat.action';
 import useChatWrapper from '_helpers/chat-wrapper';
 import { API_BASE } from '_helpers/Constant';
+import { getUserData } from '_helpers/auth-storage';
 import { useParams, useHistory } from 'react-router-dom';
 import './MessageList.css';
 import axios from 'axios';
@@ -26,8 +27,8 @@ export default function MessageList(props) {
   const chatAction = useChatAction();
   const chatWrapper = useChatWrapper();
 
-  // CRITICAL: currentUser LUÔN lấy từ Token/Storage, KHÔNG BAO GIỜ từ URL
-  const currentUser = JSON.parse(localStorage.getItem('userData') || '{}');
+  // CRITICAL: currentUser LUÔN lấy từ auth-storage (theo tab), KHÔNG BAO GIỜ từ URL
+  const currentUser = getUserData();
   const currentUserId = currentUser.student_code || currentUser.vnu_id;
   const currentRole = (currentUser.role || '').toLowerCase();
 

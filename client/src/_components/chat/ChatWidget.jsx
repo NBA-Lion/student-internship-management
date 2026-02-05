@@ -13,6 +13,7 @@ import useChatWrapper from '_helpers/chat-wrapper';
 import useChatAction from '_actions/chat.action';
 import { socketWrapper } from '_helpers/socket-wrapper';
 import { API_BASE } from '_helpers/Constant';
+import { getUserData } from '_helpers/auth-storage';
 
 // ============================================
 // CONSTANTS
@@ -248,7 +249,7 @@ export default function ChatWidget() {
     const chatWrapper = useChatWrapper();
 
     // Current user info
-    const currentUser = JSON.parse(localStorage.getItem('userData') || '{}');
+    const currentUser = getUserData();
     const myStudentCode = currentUser.student_code || currentUser.vnu_id || '';
 
     // ============================================

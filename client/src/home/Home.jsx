@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { getUserData } from '_helpers/auth-storage';
 import { useRecoilValue } from 'recoil';
 import { useEffect, useState } from 'react';
 import {
@@ -197,7 +198,7 @@ function Home() {
     const profileAction = useProfileAction();
     const userActions = useUserActions();
     const fetchWrapper = useFetchWrapper();
-    const userData = JSON.parse(localStorage.getItem("userData") || "{}");
+    const userData = getUserData();
 
     useEffect(() => {
         async function loadData() {

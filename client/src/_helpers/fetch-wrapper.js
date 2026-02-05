@@ -1,5 +1,6 @@
 import { useRecoilState, useSetRecoilState } from 'recoil';
 import { authAtom, sessionExpiredAtom } from '_state';
+import { getToken } from '_helpers/auth-storage';
 
 export { useFetchWrapper };
 
@@ -40,8 +41,8 @@ function useFetchWrapper() {
     }
 
     function authHeader(url) {
-        // Recoil có thể chưa sync; fallback localStorage để export/blob vẫn gửi token
-        const token = auth || (typeof window !== 'undefined' && localStorage.getItem('token')) || '';
+        // Recoil có thể chưa sync; fallback auth-storage (sessionStorage theo tab)
+        const token = auth || (typeof window !== 'undefined' && getToken()) || '';
         const isLoggedIn = !!token;
         const isApiUrl = url.startsWith('/api') || url.startsWith('/admin') || url.startsWith('http');
 

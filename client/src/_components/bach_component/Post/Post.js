@@ -10,6 +10,8 @@ import Grid from '@mui/material/Grid';
 import { styled } from '@mui/material/styles';
 import ImageList from '@mui/material/ImageList';
 import ImageListItem from '@mui/material/ImageListItem';
+import { getUserData } from '_helpers/auth-storage';
+
 const defaultPost =
 	{
 		"_id": "617c0f13cbe8a4f53931e5e6",
@@ -54,7 +56,7 @@ const Comment = (props) => {
 	</>)
 }
 const Post = ({ postInstance, onSendComment, liked, onLikePost, showListLiked}) => {
-	const userData = JSON.parse(localStorage.getItem("userData"));
+	const userData = getUserData();
     const itemData = [];
 	const post = postInstance;
 	const likedList = postInstance.liked;

@@ -16,11 +16,12 @@ import Button from '@mui/material/Button';
 import NewPost from '_components/bach_component/Post/NewPost';
 import { useFeedActions } from '_actions/feed.actions';
 import { Modal, Row, Col } from 'antd';
+import { getUserData } from '_helpers/auth-storage';
 import './Feed.css'
 export { Feed };
 
 function Feed() {
-    const userData = JSON.parse(localStorage.getItem("userData"));
+    const userData = getUserData();
     const [student, setstudent] = useRecoilState(studentsAtom);
     const feedPageWrapper = useFeedPageWrapper();
     const curClass = useClassWrapper().curClass;

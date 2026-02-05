@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useUserActions } from '_actions';
+import { getToken, getUserData } from '_helpers/auth-storage';
 import 'antd/dist/antd.css';
 
 import { Layout, Menu } from 'antd';
@@ -24,9 +25,9 @@ function Nav(props) {
     const onCollapse = (collapsed) => setCollapsed(collapsed);
     const userActions = useUserActions();
     const authFromRecoil = props.auth;
-    const authFromStorage = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    const authFromStorage = typeof window !== 'undefined' ? getToken() : '';
     const hasAuth = authFromRecoil || authFromStorage;
-    const userData = JSON.parse(localStorage.getItem("userData") || "{}");
+    const userData = getUserData();
 
     if (!hasAuth) return null;
 

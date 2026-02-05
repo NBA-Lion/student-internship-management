@@ -11,13 +11,14 @@ import {
     LeftCircleTwoTone,
 } from '@ant-design/icons';
 import { useUserActions } from '_actions';
+import { getUserData } from '_helpers/auth-storage';
 
 export { StuHome };
 
 
 
 function StuHome() {
-    const userData = JSON.parse(localStorage.getItem("userData"));
+    const userData = getUserData();
     const classWrapper = useClassWrapper();
     const userActions = useUserActions();
     const [teacherState, setTeacherState] = useState({

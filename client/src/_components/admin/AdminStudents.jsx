@@ -13,6 +13,7 @@ import {
 } from '@ant-design/icons';
 import { useFetchWrapper } from '_helpers';
 import { normalizeFileUrl } from '_helpers/Constant';
+import { getUserData } from '_helpers/auth-storage';
 import { sessionExpiredAtom } from '_state';
 import moment from 'moment';
 
@@ -74,7 +75,7 @@ function AdminStudents() {
     const location = useLocation();
     const fetchWrapper = useFetchWrapper();
     const setSessionExpired = useSetRecoilState(sessionExpiredAtom);
-    const userData = JSON.parse(localStorage.getItem('userData') || '{}');
+    const userData = getUserData();
     const [loading, setLoading] = useState(false);
     const [approving, setApproving] = useState(null);
     const [deleting, setDeleting] = useState(null); // Track which student is being deleted

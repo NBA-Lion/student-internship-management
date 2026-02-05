@@ -10,6 +10,7 @@ import { StatisticBoard } from '_components/dashboard';
 import { Row, Col, Card, Button } from 'antd';
 import { useStudentScoreAction } from '_actions';
 import { useClassWrapper } from '_helpers';
+import { getUserData } from '_helpers/auth-storage';
 
 export { Dashboard };
 
@@ -19,7 +20,7 @@ function Dashboard() {
     const [score, setScore] = useRecoilState(scoreAtom);
     const classWrapper = useClassWrapper();
     const studentScoreAction = useStudentScoreAction();
-    const userData = JSON.parse(localStorage.getItem("userData"));
+    const userData = getUserData();
     // const [profile,setProfile] = useRecoilState(profileAtom);
 
     const [dashProperties, setDashProperties] = useState({

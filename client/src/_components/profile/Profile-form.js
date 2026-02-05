@@ -17,6 +17,7 @@ import { useProfileAction } from '_actions';
 import { alertBachAtom } from '_state';
 import { useFetchWrapper } from '_helpers';
 import { normalizeFileUrl } from '_helpers/Constant';
+import { getUserData } from '_helpers/auth-storage';
 
 import locale from 'antd/es/date-picker/locale/vi_VN';
 
@@ -146,7 +147,7 @@ function ProfileForm(props) {
     const [uploading, setUploading] = useState({ cv: false, recommendation: false, avatar: false });
     const [localData, setLocalData] = useState(null);
     
-    const userData = useMemo(() => JSON.parse(localStorage.getItem("userData") || '{}'), []);
+    const userData = useMemo(() => getUserData(), []);
     const data = props.data || localData;
     const isTable = props.isTable;
     
