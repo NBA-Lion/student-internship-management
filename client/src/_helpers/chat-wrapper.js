@@ -54,8 +54,10 @@ function useChatWrapper() {
         if (!student_code) return;
 
         try {
-            // console.log(">>> [Chat] Đang tải tin nhắn với:", student_code);
-            setCurListMessage([]); // Xóa tin nhắn cũ trên giao diện
+            // Chỉ xóa khi chuyển sang cuộc hội thoại KHÁC. Khi polling (cùng conversation) không xóa — tránh tin nhắn "biến mất" trước khi API trả về
+            if (curChatPerson !== student_code) {
+                setCurListMessage([]);
+            }
 
             let res = await fetchWrapper.get(`/api/chat/messages/${student_code}`);
             
@@ -64,12 +66,8 @@ function useChatWrapper() {
                     res = await res.json();
                 }
 
-                // console.log(">>> [Chat] Tải thành công tin nhắn.");
-                
                 setCurChatPerson(student_code);
                 setCurListMessage(res.data || res.message || []);
-                
-                // Clear unread count for this conversation
                 clearUnreadCount(student_code);
             }
             

@@ -239,9 +239,11 @@ export default function ChatWidget() {
     const drawerOpenRef = useRef(drawerOpen);
     const selectedUserRef = useRef(selectedUser);
     const menuRef = useRef(null);
-    
+    const stateRef = useRef(state);
+
     useEffect(() => { drawerOpenRef.current = drawerOpen; }, [drawerOpen]);
     useEffect(() => { selectedUserRef.current = selectedUser; }, [selectedUser]);
+    useEffect(() => { stateRef.current = state; }, [state]);
     
     const chatWrapper = useChatWrapper();
 
@@ -308,13 +310,24 @@ export default function ChatWidget() {
             });
             const data = await response.json();
             if (data.status === 'Success') {
-                dispatch({ type: 'SET_MESSAGES', payload: data.data || [] });
+                const serverList = data.data || [];
+                const serverIds = new Set(serverList.map((m) => m._id));
+                const current = stateRef.current?.currentMessages || [];
+                const optimisticKeep = current.filter(
+                    (m) =>
+                        m._isOptimistic &&
+                        ((m.sender === myStudentCode && m.receiver === userId) ||
+                            (m.receiver === myStudentCode && m.sender === userId)) &&
+                        !serverIds.has(m._id)
+                );
+                const merged = [...serverList, ...optimisticKeep];
+                dispatch({ type: 'SET_MESSAGES', payload: merged });
                 dispatch({ type: 'MARK_READ', payload: { partnerId: userId } });
             }
         } catch (error) {
             console.error('Fetch messages error:', error);
         }
-    }, [auth]);
+    }, [auth, myStudentCode]);
 
     // ============================================
     // SOCKET LISTENERS
