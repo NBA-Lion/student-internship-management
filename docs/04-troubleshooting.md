@@ -45,9 +45,10 @@ npm install
 
 ## Lỗi khi Deploy (Vercel + Render)
 
-### CORS / Failed to fetch
-- **Render** → Environment → thêm `FRONTEND_URL` = URL Vercel
-- Save → chờ redeploy
+### CORS / Đăng ký–Đăng nhập bị treo / "blocked by CORS policy"
+- **Render** → Environment → thêm `FRONTEND_URL` = URL Vercel (vd: `https://student-internship-management.vercel.app`)
+- Backend đã cấu hình cho phép `localhost:3000` và mọi `*.vercel.app`, `credentials: true`, methods đầy đủ
+- Save → chờ redeploy backend
 
 ### 401 Unauthorized (ADMIN / SV001)
 Database Atlas chưa có user mẫu. Chạy seed với MONGODB_URI từ Render:
@@ -83,6 +84,10 @@ $env:MONGODB_URI="<uri-atlas-từ-Render>"; npm run seed
 **Đã xử lý:** Backend sẽ **không crash** khi gửi email thất bại. Thay vào đó trả về link reset ngay trên màn hình — user copy link đó vào trình duyệt để đặt lại mật khẩu.
 
 **Lưu ý:** Trên Render cần có `FRONTEND_URL` = URL Vercel để link reset đúng (vd: `https://xxx.vercel.app/reset-password/TOKEN`).
+
+### Link xem CV / thư giới thiệu báo "localhost refused"
+- **Render** → Environment → thêm `SERVER_URL` hoặc `BACKEND_URL` = URL backend (vd: `https://xxx.onrender.com`), không có `/` ở cuối
+- Frontend đã có cơ chế chuẩn hóa URL: nếu backend trả về localhost thì link sẽ được chuyển sang `REACT_APP_BACKEND_URL` khi mở trên Production
 
 ---
 

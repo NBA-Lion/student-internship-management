@@ -141,17 +141,18 @@ router.delete("/conversation/:partnerId", authMiddleware, async (req, res) => {
   }
 });
 
-// GET /api/chat/users
+// GET /api/chat/users — tìm kiếm khớp một phần (partial), escape ký tự đặc biệt regex
 router.get("/users", authMiddleware, async (req, res) => {
   try {
     const my = req.user.student_code;
     const search = req.query.search;
     let query = { student_code: { $ne: my } };
-    if (search) {
+    if (search && String(search).trim()) {
+      const escaped = String(search).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       query.$or = [
-        { full_name: { $regex: search, $options: "i" } },
-        { student_code: { $regex: search, $options: "i" } },
-        { email: { $regex: search, $options: "i" } }
+        { full_name: { $regex: escaped, $options: "i" } },
+        { student_code: { $regex: escaped, $options: "i" } },
+        { email: { $regex: escaped, $options: "i" } }
       ];
     }
     const users = await User.find(query).select("student_code full_name email avatar_url role").limit(20);

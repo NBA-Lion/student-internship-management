@@ -17,7 +17,7 @@ import moment from 'moment';
 import { authAtom, profileAtom } from '_state';
 import { useFetchWrapper } from '_helpers';
 import { useProfileAction } from '_actions';
-import { API_BASE } from '_helpers/Constant';
+import { API_BASE, normalizeFileUrl } from '_helpers/Constant';
 
 import locale from 'antd/es/date-picker/locale/vi_VN';
 
@@ -442,7 +442,7 @@ export default function InternshipTabs() {
                                         </Upload>
                                         {profile?.cv_url && (
                                             <div style={{ marginTop: 8 }}>
-                                                <a href={profile.cv_url} target="_blank" rel="noreferrer">
+                                                <a href={normalizeFileUrl(profile.cv_url)} target="_blank" rel="noreferrer">
                                                     <FilePdfOutlined style={{ color: '#ff4d4f' }} /> Xem CV đã upload
                                                 </a>
                                             </div>
@@ -466,7 +466,7 @@ export default function InternshipTabs() {
                                         </Upload>
                                         {profile?.recommendation_letter_url && (
                                             <div style={{ marginTop: 8 }}>
-                                                <a href={profile.recommendation_letter_url} target="_blank" rel="noreferrer">
+                                                <a href={normalizeFileUrl(profile.recommendation_letter_url)} target="_blank" rel="noreferrer">
                                                     <FileTextOutlined style={{ color: '#1890ff' }} /> Xem thư giới thiệu
                                                 </a>
                                             </div>
@@ -570,14 +570,14 @@ export default function InternshipTabs() {
                                     </Descriptions.Item>
                                     <Descriptions.Item label="Hồ sơ CV">
                                         {profile?.cv_url ? (
-                                            <a href={profile.cv_url} target="_blank" rel="noreferrer">
+                                            <a href={normalizeFileUrl(profile.cv_url)} target="_blank" rel="noreferrer">
                                                 <FilePdfOutlined /> Xem CV
                                             </a>
                                         ) : <Text type="secondary">Chưa upload</Text>}
                                     </Descriptions.Item>
                                     <Descriptions.Item label="Thư giới thiệu">
                                         {profile?.recommendation_letter_url ? (
-                                            <a href={profile.recommendation_letter_url} target="_blank" rel="noreferrer">
+                                            <a href={normalizeFileUrl(profile.recommendation_letter_url)} target="_blank" rel="noreferrer">
                                                 <FileTextOutlined /> Xem thư
                                             </a>
                                         ) : <Text type="secondary">Chưa upload</Text>}

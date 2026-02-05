@@ -25,6 +25,7 @@ const corsOrigins = [
   "http://localhost:3000",
   "http://localhost:3001",
   "http://127.0.0.1:3000",
+  "https://student-internship-management.vercel.app",
   ...(process.env.FRONTEND_URL
     ? process.env.FRONTEND_URL.split(",").map((u) => u.trim()).filter(Boolean)
     : [])
@@ -33,14 +34,14 @@ const corsOrigins = [
 // Cho phép mọi subdomain *.vercel.app (preview + production) - tránh phải thêm từng URL mới
 function corsOriginChecker(origin, callback) {
   if (!origin) return callback(null, true);
-  const isAllowed = corsOrigins.includes(origin) || origin.endsWith(".vercel.app");
+  const isAllowed = corsOrigins.includes(origin) || /^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(origin);
   callback(null, isAllowed);
 }
 
 const io = new Server(server, {
   cors: {
     origin: corsOriginChecker,
-    methods: ["GET", "POST"],
+    methods: ["GET", "POST", "PUT", "OPTIONS"],
     credentials: true
   }
 });
@@ -49,7 +50,10 @@ app.set("io", io);
 
 app.use(cors({
   origin: corsOriginChecker,
-  credentials: true
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  optionsSuccessStatus: 204
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -146,7 +150,7 @@ io.on("connection", async (socket) => {
         return;
       }
 
-      // Save message to database
+      // CRITICAL: Lưu tin nhắn vào DB trước khi emit — đảm bảo reload trang vẫn thấy tin
       const newMessage = await Message.create({
         sender: from,
         receiver: to,

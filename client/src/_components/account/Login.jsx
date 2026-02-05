@@ -69,6 +69,8 @@ function Login(props) {
                         {...register('username')}
                         className={errors.username ? 'error' : ''}
                         placeholder="Email hoặc MSSV"
+                        tabIndex={0}
+                        autoComplete="username"
                     />
                     {errors.username && <span className="error-msg">{errors.username.message}</span>}
                 </div>
@@ -83,11 +85,13 @@ function Login(props) {
                         {...register('password')}
                         className={errors.password ? 'error' : ''}
                         placeholder="Nhập mật khẩu"
+                        tabIndex={0}
+                        autoComplete="current-password"
                     />
                     {errors.password && <span className="error-msg">{errors.password.message}</span>}
                 </div>
 
-                <button type="submit" disabled={isSubmitting} className="auth-btn">
+                <button type="submit" disabled={isSubmitting} className="auth-btn" tabIndex={0}>
                     {isSubmitting ? 'Đang xử lý...' : 'Đăng nhập'}
                 </button>
             </form>

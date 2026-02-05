@@ -99,7 +99,14 @@ function Nav(props) {
                 </Menu.Item>
 
                 {/* Đăng xuất */}
-                <Menu.Item key="logout" onClick={userActions.logout}>
+                <Menu.Item
+                    key="logout"
+                    onClick={() => {
+                        if (typeof window !== 'undefined' && window.confirm('Bạn có chắc muốn đăng xuất?')) {
+                            userActions.logout();
+                        }
+                    }}
+                >
                     <LoginOutlined />
                     <span>Đăng xuất</span>
                 </Menu.Item>

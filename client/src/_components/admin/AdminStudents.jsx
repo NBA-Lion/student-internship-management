@@ -12,6 +12,7 @@ import {
     BankOutlined, BookOutlined, PhoneOutlined, MailOutlined, DeleteOutlined, EditOutlined, SearchOutlined, PlusOutlined
 } from '@ant-design/icons';
 import { useFetchWrapper } from '_helpers';
+import { normalizeFileUrl } from '_helpers/Constant';
 import { sessionExpiredAtom } from '_state';
 import moment from 'moment';
 
@@ -998,7 +999,7 @@ function AdminStudents() {
                                     <Text type="secondary">Hồ sơ đính kèm:</Text>
                                     <div style={{ marginTop: 8, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
                                         {selectedStudent?.cv_url ? (
-                                            <a href={selectedStudent.cv_url} target="_blank" rel="noreferrer">
+                                            <a href={normalizeFileUrl(selectedStudent.cv_url)} target="_blank" rel="noreferrer">
                                                 <Button type="link" icon={<FilePdfOutlined style={{ color: '#ff4d4f' }} />}>
                                                     📄 Xem CV
                                                 </Button>
@@ -1008,7 +1009,7 @@ function AdminStudents() {
                                         )}
                                         
                                         {selectedStudent?.recommendation_letter_url ? (
-                                            <a href={selectedStudent.recommendation_letter_url} target="_blank" rel="noreferrer">
+                                            <a href={normalizeFileUrl(selectedStudent.recommendation_letter_url)} target="_blank" rel="noreferrer">
                                                 <Button type="link" icon={<FileTextOutlined style={{ color: '#1890ff' }} />}>
                                                     📄 Xem Thư giới thiệu
                                                 </Button>

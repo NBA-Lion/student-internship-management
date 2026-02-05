@@ -29,8 +29,26 @@ const API_PATH = {
     PUBLIC_DATA: "/public/data/:filename",
     LIKE_POST: "/api/classes/:classId/feed/:postId/likes/toogle",
 };
-const HOST_NAME = "http://localhost:3000";
+const HOST_NAME = process.env.NODE_ENV === 'production' && process.env.REACT_APP_FRONTEND_URL
+  ? process.env.REACT_APP_FRONTEND_URL.replace(/\/$/, '')
+  : "http://localhost:3000";
 // Deploy: set REACT_APP_BACKEND_URL = https://your-backend.onrender.com trên Vercel
 const API_BASE = (process.env.NODE_ENV === 'production' ? process.env.REACT_APP_BACKEND_URL : 'http://localhost:5000') || 'http://localhost:5000';
 const API_BASE_CLEAN = (API_BASE || '').replace(/\/$/, '');
-export { API_PATH, HOST_NAME, API_BASE_CLEAN as API_BASE };
+
+/** Chuẩn hóa URL file từ backend: nếu backend trả về localhost thì dùng API_BASE để link mở đúng trên Production (Vercel). */
+function normalizeFileUrl(url) {
+  if (!url || typeof url !== 'string') return url;
+  try {
+    const u = url.trim();
+    if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//i.test(u)) {
+      const pathPart = u.replace(/^https?:\/\/[^/]+/, '') || '/';
+      return `${API_BASE_CLEAN}${pathPart.startsWith('/') ? pathPart : '/' + pathPart}`;
+    }
+    return u;
+  } catch (_) {
+    return url;
+  }
+}
+
+export { API_PATH, HOST_NAME, API_BASE_CLEAN as API_BASE, normalizeFileUrl };

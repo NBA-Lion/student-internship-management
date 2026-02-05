@@ -16,6 +16,7 @@ import { useRecoilState } from 'recoil';
 import { useProfileAction } from '_actions';
 import { alertBachAtom } from '_state';
 import { useFetchWrapper } from '_helpers';
+import { normalizeFileUrl } from '_helpers/Constant';
 
 import locale from 'antd/es/date-picker/locale/vi_VN';
 
@@ -731,7 +732,7 @@ function ProfileForm(props) {
                                             </Upload>
                                             {data.cv_url && (
                                                 <div style={{ marginTop: 8 }}>
-                                                    <a href={data.cv_url} target="_blank" rel="noreferrer">
+                                                    <a href={normalizeFileUrl(data.cv_url)} target="_blank" rel="noreferrer">
                                                         <FilePdfOutlined style={{ color: '#ff4d4f' }} /> Xem CV đã upload
                                                     </a>
                                                 </div>
@@ -755,7 +756,7 @@ function ProfileForm(props) {
                                             </Upload>
                                             {data.recommendation_letter_url && (
                                                 <div style={{ marginTop: 8 }}>
-                                                    <a href={data.recommendation_letter_url} target="_blank" rel="noreferrer">
+                                                    <a href={normalizeFileUrl(data.recommendation_letter_url)} target="_blank" rel="noreferrer">
                                                         <FileWordOutlined style={{ color: '#1890ff' }} /> Xem thư giới thiệu
                                                     </a>
                                                 </div>

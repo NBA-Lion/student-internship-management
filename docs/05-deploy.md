@@ -15,6 +15,7 @@
 **Environment:**
 - `MONGODB_URI` = connection string từ MongoDB Atlas
 - `FRONTEND_URL` = URL Vercel (dùng cho CORS và link reset mật khẩu)
+- `SERVER_URL` hoặc `BACKEND_URL` = URL backend Render (vd: `https://xxx.onrender.com`) — dùng cho link tải CV / thư giới thiệu; nếu không set, link file có thể trỏ localhost và báo lỗi khi mở trên Vercel
 
 ## 2. Frontend (Vercel)
 

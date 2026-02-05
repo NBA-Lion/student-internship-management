@@ -159,13 +159,14 @@ router.get("/students", authMiddleware, adminOnly, async (req, res) => {
       query.university = { $regex: university, $options: 'i' };
     }
 
-    // Tìm kiếm theo tên, mã SV hoặc email
+    // Tìm kiếm theo tên, mã SV hoặc email — khớp một phần (partial), escape ký tự đặc biệt regex
     if (search && search.trim()) {
+      const escaped = String(search.trim()).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const searchConditions = {
         $or: [
-          { full_name: { $regex: search.trim(), $options: 'i' } },
-          { student_code: { $regex: search.trim(), $options: 'i' } },
-          { email: { $regex: search.trim(), $options: 'i' } }
+          { full_name: { $regex: escaped, $options: "i" } },
+          { student_code: { $regex: escaped, $options: "i" } },
+          { email: { $regex: escaped, $options: "i" } }
         ]
       };
       if (query.$or) {

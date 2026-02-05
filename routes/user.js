@@ -33,9 +33,13 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req, file, cb) => {
-  const allowedTypes = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png'];
+  const allowedExts = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png'];
+  const allowedMimes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
   const ext = path.extname(file.originalname).toLowerCase();
-  if (allowedTypes.includes(ext)) {
+  const mime = (file.mimetype || '').toLowerCase();
+  const extOk = allowedExts.includes(ext);
+  const mimeOk = allowedMimes.includes(mime) || (ext === '.pdf' && mime === 'application/pdf');
+  if (extOk || mimeOk) {
     cb(null, true);
   } else {
     cb(new Error('Chỉ chấp nhận file PDF, Word, hoặc ảnh (JPG, PNG)'));
@@ -449,7 +453,7 @@ router.post("/upload/cv", authMiddleware, upload.single("file"), async (req, res
       return res.status(400).json({ status: "Error", message: "Không có file được upload" });
     }
 
-    const baseUrl = process.env.SERVER_URL || "http://localhost:5000";
+    const baseUrl = (process.env.SERVER_URL || process.env.BACKEND_URL || "").replace(/\/$/, "") || "http://localhost:5000";
     const fileUrl = `${baseUrl}/uploads/documents/${req.file.filename}`;
 
     // Update user's cv_url
@@ -479,7 +483,7 @@ router.post("/upload/recommendation", authMiddleware, upload.single("file"), asy
       return res.status(400).json({ status: "Error", message: "Không có file được upload" });
     }
 
-    const baseUrl = process.env.SERVER_URL || "http://localhost:5000";
+    const baseUrl = (process.env.SERVER_URL || process.env.BACKEND_URL || "").replace(/\/$/, "") || "http://localhost:5000";
     const fileUrl = `${baseUrl}/uploads/documents/${req.file.filename}`;
 
     // Update user's recommendation_letter_url
@@ -517,7 +521,7 @@ router.post("/upload/avatar", authMiddleware, upload.single("file"), async (req,
       return res.status(400).json({ status: "Error", message: "Chỉ chấp nhận file ảnh (JPG, PNG, GIF)" });
     }
 
-    const baseUrl = process.env.SERVER_URL || "http://localhost:5000";
+    const baseUrl = (process.env.SERVER_URL || process.env.BACKEND_URL || "").replace(/\/$/, "") || "http://localhost:5000";
     const fileUrl = `${baseUrl}/uploads/documents/${req.file.filename}`;
 
     // Update user's avatar (có thể thêm field avatar_url vào User model nếu cần)

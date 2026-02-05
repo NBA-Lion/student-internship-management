@@ -37,6 +37,7 @@ import {
 import { useUserActions, useProfileAction } from '_actions';
 import { profileAtom } from '_state';
 import { useFetchWrapper } from '_helpers';
+import { normalizeFileUrl } from '_helpers/Constant';
 
 const { TabPane } = Tabs;
 const { Step } = Steps;
@@ -623,7 +624,7 @@ function Home() {
                                     <div className="info-card">
                                         <div className="info-card-title"><FilePdfOutlined /> CV / Sơ yếu lý lịch</div>
                                         {user.cv_url ? (
-                                            <a href={user.cv_url} target="_blank" rel="noreferrer">
+                                            <a href={normalizeFileUrl(user.cv_url)} target="_blank" rel="noreferrer">
                                                 <Button type="link" icon={<LinkOutlined />}>Xem CV</Button>
                                             </a>
                                         ) : (
@@ -633,7 +634,7 @@ function Home() {
                                     <div className="info-card">
                                         <div className="info-card-title"><FileTextOutlined /> Thư giới thiệu</div>
                                         {user.recommendation_letter_url ? (
-                                            <a href={user.recommendation_letter_url} target="_blank" rel="noreferrer">
+                                            <a href={normalizeFileUrl(user.recommendation_letter_url)} target="_blank" rel="noreferrer">
                                                 <Button type="link" icon={<LinkOutlined />}>Xem thư giới thiệu</Button>
                                             </a>
                                         ) : (

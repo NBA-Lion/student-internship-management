@@ -131,6 +131,8 @@ function Login(props) {
                                         {...register('username')}
                                         className={errors.username ? 'error' : ''}
                                         placeholder="Email hoặc MSSV"
+                                        tabIndex={0}
+                                        autoComplete="username"
                                     />
                                     <span className="input-icon">
                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -160,6 +162,8 @@ function Login(props) {
                                         {...register('password')}
                                         className={errors.password ? 'error' : ''}
                                         placeholder="Nhập mật khẩu"
+                                        tabIndex={0}
+                                        autoComplete="current-password"
                                     />
                                     <span className="input-icon">
                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -176,6 +180,7 @@ function Login(props) {
                                 type="submit" 
                                 disabled={isSubmitting} 
                                 className="submit-btn"
+                                tabIndex={0}
                                 custom={3}
                                 variants={formItemVariants}
                                 initial="hidden"
