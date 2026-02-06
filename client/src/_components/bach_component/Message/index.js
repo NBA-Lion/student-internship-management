@@ -10,11 +10,18 @@ export default function Message(props) {
       startsSequence,
       endsSequence,
       showTimestamp,
-      isRead
+      isRead,
+      reactions = []
     } = props;
 
     const friendlyTimestamp = moment(data.timestamp).format('LLLL');
     const shortTime = moment(data.timestamp).format('HH:mm');
+    // Gom reaction theo emoji: { emoji: count }
+    const reactionGroups = (Array.isArray(reactions) ? reactions : []).reduce((acc, r) => {
+      const e = r.emoji || r;
+      acc[e] = (acc[e] || 0) + 1;
+      return acc;
+    }, {});
 
     return (
       <div className={[
@@ -34,6 +41,15 @@ export default function Message(props) {
           <div className="bubble" title={friendlyTimestamp}>
             { data.message }
           </div>
+          {endsSequence && Object.keys(reactionGroups).length > 0 && (
+            <div className="message-reactions" style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+              {Object.entries(reactionGroups).map(([emoji, count]) => (
+                <span key={emoji} className="message-reaction-chip" style={{ fontSize: 12, padding: '2px 6px', borderRadius: 10, background: '#e4e6eb' }}>
+                  {emoji} {count > 1 ? count : ''}
+                </span>
+              ))}
+            </div>
+          )}
           {endsSequence && isMine && (
             <span className="message-status" title={isRead ? 'Đã đọc' : 'Đã gửi'}>
               {isRead

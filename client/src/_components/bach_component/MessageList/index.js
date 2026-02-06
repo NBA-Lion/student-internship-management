@@ -143,7 +143,9 @@ export default function MessageList(props) {
       author: result.from?.vnu_id || result.sender,
       message: result.message || result.content,
       timestamp: new Date(result.createdDate || result.createdAt || result.timestamp),
-      is_read: !!result.is_read
+      is_read: !!result.is_read,
+      reactions: result.reactions || [],
+      type: result.type
     }));
   }, [chatWrapper.curListMessages, fetchDone, currentUserId, partnerId]);
 
@@ -193,7 +195,7 @@ export default function MessageList(props) {
     const handleMessageDeleted = (data) => {
       if (!data.messageId) return;
       chatWrapper.setCurListMessage(prev => (prev || []).map(m =>
-        m._id === data.messageId ? { ...m, message: 'Tin nhắn đã được thu hồi', type: 'recalled', attachment_url: null } : m
+        String(m._id) === String(data.messageId) ? { ...m, message: 'Tin nhắn đã được thu hồi', type: 'recalled', attachment_url: null } : m
       ));
     };
     socketWrapper.socket.on('MessageDeleted', handleMessageDeleted);
@@ -205,7 +207,7 @@ export default function MessageList(props) {
     const handleMessageUpdated = (data) => {
       if (!data._id || data.message == null) return;
       chatWrapper.setCurListMessage(prev => (prev || []).map(m =>
-        m._id === data._id ? { ...m, message: data.message, editedAt: data.editedAt } : m
+        String(m._id) === String(data._id) ? { ...m, message: data.message, editedAt: data.editedAt } : m
       ));
     };
     socketWrapper.socket.on('MessageUpdated', handleMessageUpdated);
@@ -287,6 +289,7 @@ export default function MessageList(props) {
           endsSequence={endsSequence}
           showTimestamp={showTimestamp}
           isRead={current.is_read}
+          reactions={current.reactions}
           data={current}
         />
       );

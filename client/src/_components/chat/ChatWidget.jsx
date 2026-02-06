@@ -306,6 +306,7 @@ export default function ChatWidget() {
     const selectedUserRef = useRef(selectedUser);
     const menuRef = useRef(null);
     const stateRef = useRef(state);
+    const lastSentRef = useRef({ text: '', time: 0 });
 
     useEffect(() => { drawerOpenRef.current = drawerOpen; }, [drawerOpen]);
     useEffect(() => { selectedUserRef.current = selectedUser; }, [selectedUser]);
@@ -636,6 +637,9 @@ export default function ChatWidget() {
         if (!messageText.trim() || !selectedUser) return;
         const userId = selectedUser.vnu_id || selectedUser.student_code;
         const trimmedMessage = messageText.trim();
+        // Chặn gửi trùng trong 800ms (double-click / double Enter)
+        if (lastSentRef.current.text === trimmedMessage && Date.now() - lastSentRef.current.time < 800) return;
+        lastSentRef.current = { text: trimmedMessage, time: Date.now() };
         const socketReady = socketWrapper.socket && socketWrapper.socket.connected;
 
         const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
