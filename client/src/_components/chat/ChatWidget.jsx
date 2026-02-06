@@ -72,26 +72,35 @@ function chatReducer(state, action) {
             // SMART DEDUPLICATION for Optimistic UI
             // ============================================
             if (isFromPartner || isToPartner) {
-                // Check for exact ID match
-                const existsById = newMessages.some(m => m._id === message._id);
+                // Check for exact ID match (so sánh string tránh ObjectId vs string)
+                const existsById = newMessages.some(m => String(m._id) === String(message._id));
                 
                 // Check for optimistic message that server is confirming
-                // (same sender, receiver, message content within 10 seconds)
                 const optimisticIndex = isMyMessage ? newMessages.findIndex(m => 
                     m._isOptimistic && 
-                    m.message === message.message && 
-                    m.receiver === message.receiver
+                    (m.message || m.content) === (message.message || message.content) && 
+                    (String(m.receiver) === String(message.receiver) || String(m.to?.vnu_id) === String(message.receiver))
                 ) : -1;
 
+                // Tin của mình: tránh thêm bản sao (server echo trùng nội dung)
+                const contentDupIndex = isMyMessage && optimisticIndex < 0 ? newMessages.findIndex(m => {
+                    const fromMe = (m.from?.vnu_id || m.sender) === myId;
+                    const sameContent = (m.message || m.content) === (message.message || message.content);
+                    const sameReceiver = String(m.receiver) === String(message.receiver) || String(m.to?.vnu_id) === String(message.receiver);
+                    return fromMe && sameContent && sameReceiver;
+                }) : -1;
+
                 if (existsById) {
-                    // Already have this exact message, skip
+                    // Đã có đúng tin này (theo _id), chỉ cập nhật conversation list bên dưới
                     console.log('>>> [Reducer] Skipping duplicate message:', message._id);
                 } else if (optimisticIndex >= 0) {
-                    // Replace optimistic message with server-confirmed version
                     console.log('>>> [Reducer] Replacing optimistic message with confirmed:', message._id);
                     newMessages[optimisticIndex] = { ...message, _isOptimistic: false };
+                } else if (contentDupIndex >= 0) {
+                    // Tin của mình trùng nội dung → thay bản cũ bằng bản server (tránh 2 bong bóng)
+                    console.log('>>> [Reducer] Replacing content-duplicate my message:', message._id);
+                    newMessages[contentDupIndex] = { ...message, _isOptimistic: false };
                 } else {
-                    // New message, add it
                     console.log('>>> [Reducer] Adding new message:', message._id);
                     newMessages = [...newMessages, message];
                 }
@@ -243,7 +252,7 @@ function chatReducer(state, action) {
         case 'UPDATE_MESSAGE_REACTIONS': {
             const { messageId, reactions } = action.payload;
             const newMessages = state.currentMessages.map(m =>
-                m._id === messageId ? { ...m, reactions: reactions || [] } : m
+                String(m._id) === String(messageId) ? { ...m, reactions: reactions || [] } : m
             );
             return { ...state, currentMessages: newMessages };
         }

@@ -217,7 +217,7 @@ export default function MessageList(props) {
     const handleMessageReaction = (data) => {
       if (!data.messageId || !data.reactions) return;
       chatWrapper.setCurListMessage(prev => (prev || []).map(m =>
-        m._id === data.messageId ? { ...m, reactions: data.reactions } : m
+        String(m._id) === String(data.messageId) ? { ...m, reactions: data.reactions } : m
       ));
     };
     socketWrapper.socket.on('MessageReaction', handleMessageReaction);
