@@ -138,57 +138,67 @@ io.on("connection", async (socket) => {
 
   // ============================================
   // TASK 2: HANDLE SEND MESSAGE (PRIVATE 1-on-1)
+  // Trình tự CHUẨN: Nhận data → Lưu DB → Chỉ khi lưu thành công mới emit (reload vẫn thấy tin)
+  // Schema Message: sender, receiver, message (không dùng senderId/receiverId/content)
   // ============================================
   socket.on("NewMessage", async (data) => {
     try {
-      const { to, message: content, type: msgType } = data;
-      const from = userId; // ALWAYS use authenticated user, NOT client data
+      // ---------- Bước 1: Nhận data từ client ----------
+      const { to, message: content, type: msgType } = data || {};
+      const from = userId; // LUÔN lấy từ auth, không tin client
 
-      // Validate input
-      if (!to || !content) {
+      if (!to || content == null || String(content).trim() === "") {
         socket.emit("MessageError", { message: "Thiếu người nhận hoặc nội dung" });
         return;
       }
-
-      // Prevent sending message to self
       if (to === from) {
         socket.emit("MessageError", { message: "Không thể gửi tin nhắn cho chính mình" });
         return;
       }
 
-      // CRITICAL: Lưu tin nhắn vào DB trước khi emit — đảm bảo reload trang vẫn thấy tin
-      const newMessage = await Message.create({
-        sender: from,
-        receiver: to,
-        message: content,
-        type: msgType || "text"
-      });
+      const messageContent = String(content).trim();
 
-      // IMPORTANT: Fetch sender info from DB, NOT from client
-      // This ensures the sender name is always accurate
+      // ---------- Bước 2: Lưu vào MongoDB (Model Message: sender, receiver, message) ----------
+      let savedMessage = null;
+      try {
+        savedMessage = await Message.create({
+          sender: from,
+          receiver: to,
+          message: messageContent,
+          type: msgType === "image" || msgType === "file" ? msgType : "text"
+        });
+      } catch (dbErr) {
+        console.error(">>> [Socket] Message.create failed:", dbErr.message);
+        socket.emit("MessageError", { message: "Lỗi lưu tin nhắn: " + dbErr.message });
+        return;
+      }
+
+      // Chỉ khi có bản ghi đã lưu (có _id) mới emit
+      if (!savedMessage || !savedMessage._id) {
+        console.error(">>> [Socket] Message.create did not return saved document");
+        socket.emit("MessageError", { message: "Lỗi lưu tin nhắn" });
+        return;
+      }
+
+      // ---------- Bước 3: Chỉ sau khi lưu thành công mới emit cho client ----------
       const senderUser = await User.findOne({ student_code: from })
         .select("student_code full_name avatar_url");
       const receiverUser = await User.findOne({ student_code: to })
         .select("student_code full_name avatar_url");
 
-      // Check if this is a new contact (first message between these users)
       const previousCount = await Message.countDocuments({
         $or: [
           { sender: from, receiver: to },
           { sender: to, receiver: from }
         ],
-        _id: { $ne: newMessage._id }
+        _id: { $ne: savedMessage._id }
       });
       const isNewContact = previousCount === 0;
 
-      // ============================================
-      // CONSTRUCT PAYLOAD WITH VERIFIED SENDER INFO
-      // ============================================
       const messagePayload = {
-        _id: newMessage._id,
-        message: newMessage.message,
-        content: newMessage.message, // Alias for compatibility
-        // CRITICAL: Sender info comes from DATABASE, not client
+        _id: savedMessage._id,
+        message: savedMessage.message,
+        content: savedMessage.message,
         from: {
           vnu_id: from,
           id: from,
@@ -203,36 +213,21 @@ io.on("connection", async (socket) => {
         },
         sender: from,
         receiver: to,
-        createdAt: newMessage.createdAt,
-        createdDate: newMessage.createdAt,
-        timestamp: newMessage.createdAt,
-        type: newMessage.type,
+        createdAt: savedMessage.createdAt,
+        createdDate: savedMessage.createdAt,
+        timestamp: savedMessage.createdAt,
+        type: savedMessage.type,
         is_read: false,
         newContact: isNewContact
       };
 
-      // ============================================
-      // EMIT TO SPECIFIC USERS ONLY (PRIVATE CHAT)
-      // ============================================
-      
-      // 1. Send to RECEIVER ONLY (using their private room)
-      io.to(to).emit("NewMessage", {
-        ...messagePayload,
-        isSender: false,
-        selfSend: false
-      });
+      io.to(to).emit("NewMessage", { ...messagePayload, isSender: false, selfSend: false });
+      socket.emit("NewMessage", { ...messagePayload, isSender: true, selfSend: true });
 
-      // 2. Send confirmation back to SENDER ONLY (their own socket)
-      socket.emit("NewMessage", {
-        ...messagePayload,
-        isSender: true,
-        selfSend: true
-      });
-
-      console.log(`>>> [Socket] Private Message: ${from} (${senderUser?.full_name}) -> ${to} (${receiverUser?.full_name}) | Content: "${content.substring(0, 30)}..."`);
-      console.log(`>>> [Socket] Payload from.name: ${messagePayload.from.name}`);
+      console.log(`>>> [Socket] Message saved & emitted: ${from} -> ${to} | _id: ${savedMessage._id}`);
     } catch (e) {
-      console.error(">>> [Socket] Error sending message:", e.message);
+      // ---------- Bước 4: Bắt lỗi và log ----------
+      console.error(">>> [Socket] Error in NewMessage handler:", e.message);
       socket.emit("MessageError", { message: "Lỗi gửi tin nhắn: " + e.message });
     }
   });
