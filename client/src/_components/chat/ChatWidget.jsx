@@ -975,7 +975,7 @@ export default function ChatWidget() {
                         <span className="chat-bubble-text">{text}</span>
                     </a>
                 ) : (
-                    <div className={`chat-bubble ${isMine ? 'chat-bubble-mine' : 'chat-bubble-theirs'} ${type === 'recalled' ? 'chat-bubble-recalled' : ''}`} style={{ maxWidth: '75%', padding: '12px 16px', ...getBorderRadius(), wordBreak: 'break-word', cursor: 'pointer' }} onClick={toggleSelect}>
+                    <div className={`chat-bubble ${isMine ? 'chat-bubble-mine' : 'chat-bubble-theirs'} ${type === 'recalled' ? 'chat-bubble-recalled' : ''}`} style={{ maxWidth: '75%', padding: '12px 16px', ...getBorderRadius(), wordBreak: 'break-word', cursor: 'pointer' }} onClick={toggleSelect} title="Bấm để xem Sửa / Thu hồi / Reaction">
                         <div className="chat-bubble-text">{text}</div>
                         {editedAt && <div className="chat-edited-label">Đã chỉnh sửa</div>}
                     </div>

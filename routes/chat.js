@@ -73,19 +73,38 @@ router.get("/conversations", authMiddleware, async (req, res) => {
 });
 
 // GET /api/chat/messages/:student_code
+// Khi other === "ADMIN": trả về tin nhắn giữa my và bất kỳ user role admin nào (để sinh viên thấy tin admin gửi dù admin có student_code khác "ADMIN")
 router.get("/messages/:student_code", authMiddleware, async (req, res) => {
   try {
     const my = req.user.student_code;
     const other = req.params.student_code;
-    const messages = await Message.find({
-      $or: [
-        { sender: my, receiver: other },
-        { sender: other, receiver: my }
-      ]
-    }).sort({ createdAt: 1 });
+
+    let messageFilter;
+    let adminIds = [];
+    if (other === "ADMIN") {
+      adminIds = await User.find({ role: "admin" }).distinct("student_code");
+      if (adminIds.length === 0) adminIds.push("ADMIN"); // fallback
+      messageFilter = {
+        $or: [
+          { sender: my, receiver: { $in: adminIds } },
+          { sender: { $in: adminIds }, receiver: my }
+        ]
+      };
+    } else {
+      messageFilter = {
+        $or: [
+          { sender: my, receiver: other },
+          { sender: other, receiver: my }
+        ]
+      };
+    }
+
+    const messages = await Message.find(messageFilter).sort({ createdAt: 1 });
 
     const myUser = await User.findOne({ student_code: my }).select("student_code full_name");
-    const otherUser = await User.findOne({ student_code: other }).select("student_code full_name");
+    const otherUser = other === "ADMIN"
+      ? await User.findOne({ role: "admin" }).select("student_code full_name")
+      : await User.findOne({ student_code: other }).select("student_code full_name");
 
     const formatted = messages.map((msg) => {
       const isMine = msg.sender === my;
@@ -111,14 +130,14 @@ router.get("/messages/:student_code", authMiddleware, async (req, res) => {
       };
     });
 
-    const updateResult = await Message.updateMany(
-      { sender: other, receiver: my, is_read: false },
-      { $set: { is_read: true, read_at: new Date() } }
-    );
+    const readFilter = other === "ADMIN"
+      ? { sender: { $in: adminIds }, receiver: my, is_read: false }
+      : { sender: other, receiver: my, is_read: false };
+    const updateResult = await Message.updateMany(readFilter, { $set: { is_read: true, read_at: new Date() } });
     // Gửi thông báo "đã đọc" cho người gửi (để hiện 2 tick)
     if (updateResult.modifiedCount > 0) {
       const io = req.app.get("io");
-      if (io) io.to(other).emit("MessagesRead", { by: my });
+      if (io) io.to(other === "ADMIN" ? "ADMIN" : other).emit("MessagesRead", { by: my });
     }
 
     return res.json({ status: "Success", data: formatted });
