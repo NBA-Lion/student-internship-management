@@ -5,6 +5,7 @@ import Message from '../Message';
 import moment from 'moment';
 import useChatAction from '_actions/chat.action';
 import useChatWrapper from '_helpers/chat-wrapper';
+import { socketWrapper } from '_helpers/socket-wrapper';
 import { API_BASE } from '_helpers/Constant';
 import { getUserData } from '_helpers/auth-storage';
 import { useParams, useHistory } from 'react-router-dom';
@@ -92,8 +93,24 @@ export default function MessageList(props) {
   }, [partnerId]);
 
   // ============================================
+  // CONVERSATION DELETED: bên kia xóa → mình cũng bỏ cuộc hội thoại (redirect /chat)
+  // ============================================
+  useEffect(() => {
+    if (!socketWrapper.socket || !partnerId) return;
+    const handleConversationDeleted = (data) => {
+      const otherId = data.by || data.with;
+      if (otherId === partnerId) {
+        chatWrapper.setCurListMessage([]);
+        chatWrapper.setCurChatPerson(null);
+        history.replace('/chat');
+      }
+    };
+    socketWrapper.socket.on('ConversationDeleted', handleConversationDeleted);
+    return () => socketWrapper.socket.off('ConversationDeleted', handleConversationDeleted);
+  }, [partnerId, history, chatWrapper]);
+
+  // ============================================
   // SHORT POLLING FALLBACK (Vercel/serverless: Socket.io unreliable)
-  // Poll messages every 2s so receiver sees new messages without manual reload
   // ============================================
   const POLL_INTERVAL_MS = 2000;
   useEffect(() => {

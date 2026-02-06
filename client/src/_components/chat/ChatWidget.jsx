@@ -538,14 +538,12 @@ export default function ChatWidget() {
         }, 3000);
     }, [selectedUser, lastTypingTime]);
 
-    const handleSendMessage = useCallback(() => {
+    const handleSendMessage = useCallback(async () => {
         if (!messageText.trim() || !selectedUser) return;
         const userId = selectedUser.vnu_id || selectedUser.student_code;
         const trimmedMessage = messageText.trim();
-        
-        // ============================================
-        // OPTIMISTIC UI: Show message INSTANTLY before server confirms
-        // ============================================
+        const socketReady = socketWrapper.socket && socketWrapper.socket.connected;
+
         const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         const optimisticMessage = {
             _id: tempId,
@@ -553,50 +551,45 @@ export default function ChatWidget() {
             type: 'text',
             sender: myStudentCode,
             receiver: userId,
-            from: {
-                vnu_id: myStudentCode,
-                id: myStudentCode,
-                name: currentUser.full_name || 'Tôi'
-            },
-            to: {
-                vnu_id: userId,
-                id: userId,
-                name: selectedUser.name || userId
-            },
+            from: { vnu_id: myStudentCode, id: myStudentCode, name: currentUser.full_name || 'Tôi' },
+            to: { vnu_id: userId, id: userId, name: selectedUser.name || userId },
             createdAt: new Date().toISOString(),
             createdDate: new Date().toISOString(),
             selfSend: true,
             isSender: true,
-            _isOptimistic: true // Flag to identify optimistic messages
+            _isOptimistic: true,
         };
 
-        // IMMEDIATELY add to state (Optimistic Update)
-        dispatch({ 
-            type: 'ADD_MESSAGE', 
-            payload: { 
-                message: optimisticMessage, 
-                partnerId: userId, 
-                myId: myStudentCode 
-            }
-        });
-
-        // Clear input immediately for snappy UX
-        setMessageText('');
-        setShowEmojiPicker(false);
-
-        // Emit to server in background
-        if (socketWrapper.socket) {
+        if (socketReady) {
+            dispatch({ type: 'ADD_MESSAGE', payload: { message: optimisticMessage, partnerId: userId, myId: myStudentCode } });
+            setMessageText('');
+            setShowEmojiPicker(false);
             socketWrapper.socket.emit('StopTyping', { to: userId });
-            socketWrapper.socket.emit('NewMessage', { 
-                to: userId, 
-                message: trimmedMessage,
-                tempId: tempId // Send tempId so server can help deduplicate
-            });
+            socketWrapper.socket.emit('NewMessage', { to: userId, message: trimmedMessage, tempId });
+            setTimeout(() => scrollToBottom(), 50);
+            return;
         }
 
-        // Scroll to bottom after state update
+        // Fallback HTTP khi socket không kết nối (user mới / Vercel)
+        setMessageText('');
+        setShowEmojiPicker(false);
+        try {
+            const response = await fetch(`${API_BASE}/api/chat/send-message`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${auth}` },
+                body: JSON.stringify({ to: userId, message: trimmedMessage, type: 'text' }),
+            });
+            const data = await response.json();
+            if (data.status === 'Success' && data.data) {
+                dispatch({ type: 'ADD_MESSAGE', payload: { message: { ...data.data, isSender: true, selfSend: true }, partnerId: userId, myId: myStudentCode } });
+            } else {
+                message.error(data.message || 'Không gửi được tin nhắn');
+            }
+        } catch (err) {
+            message.error('Lỗi kết nối. Thử lại.');
+        }
         setTimeout(() => scrollToBottom(), 50);
-    }, [messageText, selectedUser, scrollToBottom, myStudentCode, currentUser]);
+    }, [messageText, selectedUser, scrollToBottom, myStudentCode, currentUser, auth]);
 
     const handleSearch = useCallback(async (value) => {
         setSearchText(value);

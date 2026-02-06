@@ -31,14 +31,12 @@ function useChatAction() {
         const text = (content || '').trim();
         if (!text) return;
 
-        // Người nhận hiện tại (được set khi click vào cuộc trò chuyện)
         const toId = chatWrapper.curChatPerson;
         if (!toId) {
             setAlert({ message: "Lỗi", description: "Chưa chọn người để nhắn tin" });
             return;
         }
 
-        // Lấy thông tin user hiện tại để build message giống server
         let uInfo = await authWrapper.getUserInfo().catch(() => null);
         const myId = uInfo?.student_code || uInfo?.vnu_id;
         const myName = uInfo?.full_name || uInfo?.name || 'Tôi';
@@ -46,43 +44,46 @@ function useChatAction() {
         const now = new Date().toISOString();
         const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-        // Tin nhắn "optimistic" để hiện ngay lập tức trên UI (trước khi server trả về)
         const optimisticMessage = {
             _id: tempId,
             message: text,
             type: 'text',
             sender: myId,
             receiver: toId,
-            from: {
-                vnu_id: myId,
-                id: myId,
-                name: myName,
-            },
-            to: {
-                vnu_id: toId,
-                id: toId,
-            },
+            from: { vnu_id: myId, id: myId, name: myName },
+            to: { vnu_id: toId, id: toId },
             createdAt: now,
             createdDate: now,
             selfSend: true,
             isSender: true,
-            _isOptimistic: true, // Đánh dấu để sau này thay bằng bản từ server
+            _isOptimistic: true,
         };
 
-        // Cập nhật ngay danh sách tin nhắn của cuộc trò chuyện hiện tại
         const currentMessages = chatWrapper.curListMessages || [];
-        chatWrapper.setCurListMessage([...currentMessages, optimisticMessage]);
+        const socketReady = socketWrapper.socket && socketWrapper.socket.connected;
 
-        // Gửi sự kiện qua Socket lên server (background)
-        if (socketWrapper.socket) {
-            socketWrapper.socket.emit("NewMessage", {
+        if (socketReady) {
+            chatWrapper.setCurListMessage([...currentMessages, optimisticMessage]);
+            socketWrapper.socket.emit("NewMessage", { to: toId, message: text, tempId });
+            return;
+        }
+
+        // Fallback HTTP: user mới / Vercel socket không nối được → gửi qua API
+        try {
+            const res = await fetcher.post("/api/chat/send-message", "application/json", {
                 to: toId,
                 message: text,
-                tempId: tempId,
+                type: "text",
             });
-        } else {
-            // Fallback: nếu socket chưa sẵn sàng, báo lỗi nhẹ
-            setAlert({ message: "Lỗi kết nối", description: "Không thể kết nối máy chủ chat. Vui lòng thử lại sau." });
+            const data = res._data || (typeof res.json === 'function' ? await res.json() : null);
+            if (data && data.status === "Success" && data.data) {
+                const serverMsg = { ...data.data, _isOptimistic: false };
+                chatWrapper.setCurListMessage([...currentMessages, serverMsg]);
+            } else {
+                setAlert({ message: "Lỗi gửi tin", description: (data && data.message) || "Thử lại sau." });
+            }
+        } catch (err) {
+            setAlert({ message: "Lỗi kết nối", description: err.message || "Không thể gửi tin. Thử lại sau." });
         }
     }
 

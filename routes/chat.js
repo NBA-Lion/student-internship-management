@@ -101,6 +101,56 @@ router.get("/messages/:student_code", authMiddleware, async (req, res) => {
   }
 });
 
+// POST /api/chat/send-message — Fallback gửi tin khi Socket không dùng được (VD: user mới / Vercel)
+router.post("/send-message", authMiddleware, async (req, res) => {
+  try {
+    const my = req.user.student_code;
+    const { to, message: content, type: msgType } = req.body || {};
+    if (!to || !content) {
+      return res.status(400).json({ status: "Error", message: "Thiếu người nhận hoặc nội dung" });
+    }
+    if (to === my) {
+      return res.status(400).json({ status: "Error", message: "Không thể gửi tin nhắn cho chính mình" });
+    }
+
+    const newMessage = await Message.create({
+      sender: my,
+      receiver: to,
+      message: String(content).trim(),
+      type: msgType || "text"
+    });
+
+    const senderUser = await User.findOne({ student_code: my }).select("student_code full_name avatar_url");
+    const receiverUser = await User.findOne({ student_code: to }).select("student_code full_name avatar_url");
+
+    const messagePayload = {
+      _id: newMessage._id,
+      message: newMessage.message,
+      content: newMessage.message,
+      from: { vnu_id: my, id: my, name: senderUser?.full_name || "Người dùng", avatar_url: senderUser?.avatar_url || null },
+      to: { vnu_id: to, id: to, name: receiverUser?.full_name || "Người dùng", avatar_url: receiverUser?.avatar_url || null },
+      sender: my,
+      receiver: to,
+      createdAt: newMessage.createdAt,
+      createdDate: newMessage.createdAt,
+      type: newMessage.type,
+      isSender: true,
+      selfSend: true
+    };
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(to).emit("NewMessage", { ...messagePayload, isSender: false, selfSend: false });
+      io.to(my).emit("NewMessage", { ...messagePayload, isSender: true, selfSend: true });
+    }
+
+    return res.json({ status: "Success", data: messagePayload });
+  } catch (e) {
+    console.error(">>> [Chat] send-message:", e.message);
+    return res.status(500).json({ status: "Error", message: e.message || "Lỗi gửi tin nhắn" });
+  }
+});
+
 // PUT /api/chat/read/:partnerId
 router.put("/read/:partnerId", authMiddleware, async (req, res) => {
   try {
