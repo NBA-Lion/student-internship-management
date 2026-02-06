@@ -1,21 +1,27 @@
 .message {
   display: flex;
   flex-direction: column;
+  margin-bottom: 2px;
 }
 
 .message .timestamp {
   display: flex;
   justify-content: center;
-  color: #999;
+  color: #65676b;
   font-weight: 600;
-  font-size: 12px;
-  margin: 10px 0px;
+  font-size: 11px;
+  margin: 12px 0 6px;
   text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 
 .message .bubble-container {
   font-size: 14px;
+  line-height: 1.5;
+  letter-spacing: 0.01em;
   display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
 }
 
 .message.mine .bubble-container {
@@ -23,42 +29,74 @@
 }
 
 .message.start .bubble-container .bubble {
-  /* margin-top: 10px; */
-  border-top-left-radius: 20px;
+  border-top-left-radius: 18px;
 }
 
 .message.end .bubble-container .bubble {
-  border-bottom-left-radius: 20px;
-  /* margin-bottom: 10px; */
+  border-bottom-left-radius: 18px;
 }
 
 .message.mine.start .bubble-container .bubble {
-  margin-top: 10px;
-  border-top-right-radius: 20px;
+  margin-top: 6px;
+  border-top-right-radius: 18px;
 }
 
 .message.mine.end .bubble-container .bubble {
-  border-bottom-right-radius: 20px;
-  margin-bottom: 10px;
+  border-bottom-right-radius: 18px;
+  margin-bottom: 6px;
 }
 
 .message .bubble-container .bubble {
-  margin: 1px 0px;
-  background: #f4f4f8;
-  padding: 10px 15px;
-  border-radius: 20px;
+  margin: 1px 0;
+  background: #e4e6eb;
+  color: #050505;
+  padding: 12px 16px;
+  border-radius: 18px;
   max-width: 75%;
-  border-top-left-radius: 2px;
-  border-bottom-left-radius: 2px;
-  border-top-right-radius: 20px;
-  border-bottom-right-radius: 20px;
+  border-top-left-radius: 4px;
+  border-bottom-left-radius: 4px;
+  border-top-right-radius: 18px;
+  border-bottom-right-radius: 18px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
 .message.mine .bubble-container .bubble {
-  background: #007aff;
-  color: white;
-  border-top-left-radius: 20px;
-  border-bottom-left-radius: 20px;
-  border-top-right-radius: 2px;
-  border-bottom-right-radius: 2px;
+  background: linear-gradient(135deg, #0084ff 0%, #0066cc 100%);
+  color: #fff;
+  border-top-left-radius: 18px;
+  border-bottom-left-radius: 18px;
+  border-top-right-radius: 4px;
+  border-bottom-right-radius: 4px;
+}
+
+.message.mine .bubble-container {
+  align-items: flex-end;
+}
+
+.message-status {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
+  font-size: 10px;
+  flex-shrink: 0;
+}
+
+.message-status .read-ticks {
+  color: #0084ff;
+  display: inline-flex;
+}
+
+.message-status .read-ticks .anticon:last-child {
+  margin-left: -6px;
+}
+
+.message-status .sent-tick {
+  color: #8a8d91;
+}
+
+.message-time {
+  font-size: 11px;
+  color: #65676b;
+  margin-left: 4px;
+  align-self: flex-end;
 }

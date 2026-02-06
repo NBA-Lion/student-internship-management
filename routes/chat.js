@@ -19,6 +19,24 @@ const chatUpload = multer({
   limits: { fileSize: 10 * 1024 * 1024 }
 });
 
+const chatFileUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => cb(null, chatUploadDir),
+    filename: (req, file, cb) => cb(null, Date.now() + "_" + Math.round(Math.random() * 1e9) + path.extname(file.originalname))
+  }),
+  limits: { fileSize: 15 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = [
+      "application/pdf",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "image/jpeg", "image/png", "image/gif", "image/webp"
+    ];
+    if (allowed.includes(file.mimetype)) return cb(null, true);
+    cb(new Error("Chỉ chấp nhận file PDF, Word hoặc ảnh."));
+  }
+});
+
 // GET /api/chat/conversations
 router.get("/conversations", authMiddleware, async (req, res) => {
   try {
@@ -71,28 +89,37 @@ router.get("/messages/:student_code", authMiddleware, async (req, res) => {
 
     const formatted = messages.map((msg) => {
       const isMine = msg.sender === my;
+      const recalled = !!msg.deleted;
       return {
         _id: msg._id,
-        message: msg.message,
-        content: msg.message,
+        message: recalled ? "Tin nhắn đã được thu hồi" : msg.message,
+        content: recalled ? "Tin nhắn đã được thu hồi" : msg.message,
         from: { vnu_id: msg.sender, name: isMine ? (myUser?.full_name || "Tôi") : (otherUser?.full_name || "Người dùng") },
         to: { vnu_id: msg.receiver, name: isMine ? (otherUser?.full_name || "Người dùng") : (myUser?.full_name || "Tôi") },
         sender: msg.sender,
         receiver: msg.receiver,
         isSender: isMine,
-        type: msg.type,
-        attachment_url: msg.attachment_url,
+        type: recalled ? "recalled" : msg.type,
+        attachment_url: recalled ? null : msg.attachment_url,
         is_read: msg.is_read,
+        deleted: recalled,
+        editedAt: msg.editedAt,
+        reactions: msg.reactions || [],
         createdAt: msg.createdAt,
         createdDate: msg.createdAt,
         updatedAt: msg.updatedAt
       };
     });
 
-    await Message.updateMany(
+    const updateResult = await Message.updateMany(
       { sender: other, receiver: my, is_read: false },
       { $set: { is_read: true, read_at: new Date() } }
     );
+    // Gửi thông báo "đã đọc" cho người gửi (để hiện 2 tick)
+    if (updateResult.modifiedCount > 0) {
+      const io = req.app.get("io");
+      if (io) io.to(other).emit("MessagesRead", { by: my });
+    }
 
     return res.json({ status: "Success", data: formatted });
   } catch (e) {
@@ -134,6 +161,7 @@ router.post("/send-message", authMiddleware, async (req, res) => {
       createdAt: newMessage.createdAt,
       createdDate: newMessage.createdAt,
       type: newMessage.type,
+      is_read: false,
       isSender: true,
       selfSend: true
     };
@@ -165,6 +193,92 @@ router.put("/read/:partnerId", authMiddleware, async (req, res) => {
     return res.json({ status: "Success" });
   } catch (e) {
     return res.status(500).json({ status: "Error" });
+  }
+});
+
+// PUT /api/chat/message/:id — Sửa tin nhắn (chỉ người gửi, chỉ text)
+router.put("/message/:id", authMiddleware, async (req, res) => {
+  try {
+    const my = req.user.student_code;
+    const msgId = req.params.id;
+    const { message: newContent } = req.body || {};
+    if (!newContent || !String(newContent).trim()) return res.status(400).json({ status: "Error", message: "Thiếu nội dung" });
+    const msg = await Message.findById(msgId);
+    if (!msg) return res.status(404).json({ status: "Error", message: "Không tìm thấy tin nhắn" });
+    if (msg.sender !== my) return res.status(403).json({ status: "Error", message: "Chỉ người gửi mới sửa được" });
+    if (msg.deleted) return res.status(400).json({ status: "Error", message: "Không thể sửa tin đã thu hồi" });
+    const editedAt = new Date();
+    await Message.updateOne({ _id: msgId }, { $set: { message: String(newContent).trim(), editedAt } });
+    const partnerId = msg.receiver;
+    const senderUser = await User.findOne({ student_code: my }).select("student_code full_name");
+    const receiverUser = await User.findOne({ student_code: partnerId }).select("student_code full_name");
+    const payload = {
+      _id: msgId,
+      message: String(newContent).trim(),
+      sender: my,
+      receiver: partnerId,
+      from: { vnu_id: my, name: senderUser?.full_name || "Người dùng" },
+      to: { vnu_id: partnerId, name: receiverUser?.full_name || "Người dùng" },
+      editedAt,
+      type: msg.type
+    };
+    const io = req.app.get("io");
+    if (io) {
+      io.to(partnerId).emit("MessageUpdated", payload);
+      io.to(my).emit("MessageUpdated", payload);
+    }
+    return res.json({ status: "Success", data: payload });
+  } catch (e) {
+    console.error(">>> [Chat] put message:", e.message);
+    return res.status(500).json({ status: "Error", message: e.message });
+  }
+});
+
+// DELETE /api/chat/message/:id — Thu hồi một tin nhắn (chỉ người gửi)
+router.delete("/message/:id", authMiddleware, async (req, res) => {
+  try {
+    const my = req.user.student_code;
+    const msgId = req.params.id;
+    const msg = await Message.findById(msgId);
+    if (!msg) return res.status(404).json({ status: "Error", message: "Không tìm thấy tin nhắn" });
+    if (msg.sender !== my) return res.status(403).json({ status: "Error", message: "Chỉ người gửi mới thu hồi được" });
+    await Message.updateOne({ _id: msgId }, { $set: { deleted: true, deletedAt: new Date(), deletedBy: my } });
+    const partnerId = msg.receiver;
+    const io = req.app.get("io");
+    if (io) {
+      io.to(partnerId).emit("MessageDeleted", { messageId: msgId, partnerId: my });
+      io.to(my).emit("MessageDeleted", { messageId: msgId, partnerId });
+    }
+    return res.json({ status: "Success", message: "Đã thu hồi tin nhắn" });
+  } catch (e) {
+    console.error(">>> [Chat] delete message:", e.message);
+    return res.status(500).json({ status: "Error", message: e.message });
+  }
+});
+
+// POST /api/chat/message/:id/reaction — Thêm/bỏ reaction (toggle)
+router.post("/message/:id/reaction", authMiddleware, async (req, res) => {
+  try {
+    const my = req.user.student_code;
+    const msgId = req.params.id;
+    const { emoji } = req.body || {};
+    if (!emoji || !String(emoji).trim()) return res.status(400).json({ status: "Error", message: "Thiếu emoji" });
+    const msg = await Message.findById(msgId);
+    if (!msg) return res.status(404).json({ status: "Error", message: "Không tìm thấy tin nhắn" });
+    const reactions = (msg.reactions || []).filter(r => !(r.emoji === emoji && r.by === my));
+    const hadMine = (msg.reactions || []).some(r => r.emoji === emoji && r.by === my);
+    if (!hadMine) reactions.push({ emoji: String(emoji).trim(), by: my });
+    await Message.updateOne({ _id: msgId }, { $set: { reactions } });
+    const partnerId = msg.sender === my ? msg.receiver : msg.sender;
+    const io = req.app.get("io");
+    if (io) {
+      io.to(partnerId).emit("MessageReaction", { messageId: msgId, reactions });
+      io.to(my).emit("MessageReaction", { messageId: msgId, reactions });
+    }
+    return res.json({ status: "Success", data: { messageId: msgId, reactions } });
+  } catch (e) {
+    console.error(">>> [Chat] reaction:", e.message);
+    return res.status(500).json({ status: "Error", message: e.message });
   }
 });
 
@@ -271,6 +385,51 @@ router.post("/upload-image", authMiddleware, chatUpload.single("image"), async (
   } catch (e) {
     console.error(">>> [Chat] upload:", e.message);
     return res.status(500).json({ status: "Error" });
+  }
+});
+
+// POST /api/chat/upload-file — Gửi file (PDF, Word, ảnh) trong chat
+router.post("/upload-file", authMiddleware, chatFileUpload.single("file"), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ status: "Error", message: "Không có file" });
+    const to = req.body.to;
+    const from = req.user.student_code;
+    if (!to) {
+      fs.unlinkSync(req.file.path);
+      return res.status(400).json({ status: "Error", message: "Thiếu người nhận" });
+    }
+    const fileUrl = "/uploads/chat/" + req.file.filename;
+    const isImage = (req.file.mimetype || "").startsWith("image/");
+    const newMessage = await Message.create({
+      sender: from,
+      receiver: to,
+      message: isImage ? "[Hình ảnh]" : "[File] " + (req.file.originalname || req.file.filename),
+      type: isImage ? "image" : "file",
+      attachment_url: fileUrl
+    });
+    const senderUser = await User.findOne({ student_code: from }).select("student_code full_name avatar_url");
+    const receiverUser = await User.findOne({ student_code: to }).select("student_code full_name avatar_url");
+    const messageData = {
+      _id: newMessage._id,
+      message: newMessage.message,
+      type: newMessage.type,
+      attachment_url: fileUrl,
+      from: { vnu_id: from, name: senderUser?.full_name || "Người dùng", avatar_url: senderUser?.avatar_url },
+      to: { vnu_id: to, name: receiverUser?.full_name || "Người dùng", avatar_url: receiverUser?.avatar_url },
+      sender: from,
+      receiver: to,
+      createdAt: newMessage.createdAt,
+      createdDate: newMessage.createdAt
+    };
+    const io = req.app.get("io");
+    if (io) {
+      io.to(to).emit("NewMessage", { ...messageData, isSender: false, selfSend: false });
+      io.to(from).emit("NewMessage", { ...messageData, isSender: true, selfSend: true });
+    }
+    return res.json({ status: "Success", data: messageData });
+  } catch (e) {
+    console.error(">>> [Chat] upload-file:", e.message);
+    return res.status(500).json({ status: "Error", message: e.message || "Lỗi tải file" });
   }
 });
 

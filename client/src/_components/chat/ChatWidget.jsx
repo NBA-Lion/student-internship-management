@@ -4,7 +4,7 @@ import {
     MessageOutlined, SendOutlined, SearchOutlined, UserOutlined, ArrowLeftOutlined,
     DeleteOutlined, PictureOutlined, SmileOutlined, CheckOutlined, LoadingOutlined,
     MoreOutlined, PushpinOutlined, InboxOutlined, BellOutlined, StopOutlined,
-    EyeInvisibleOutlined
+    EyeInvisibleOutlined, PaperClipOutlined, FilePdfOutlined
 } from '@ant-design/icons';
 import { useRecoilValue, useRecoilState } from 'recoil';
 import { authAtom } from '_state';
@@ -14,10 +14,25 @@ import useChatAction from '_actions/chat.action';
 import { socketWrapper } from '_helpers/socket-wrapper';
 import { API_BASE } from '_helpers/Constant';
 import { getUserData } from '_helpers/auth-storage';
+import './Chat.css';
 
 // ============================================
 // CONSTANTS
 // ============================================
+const CHAT_MUTED_KEY = 'chat_muted_partners';
+function getMutedPartners() {
+  try {
+    const raw = localStorage.getItem(CHAT_MUTED_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (_) { return {}; }
+}
+function setMutedPartner(partnerId, muted) {
+  const o = getMutedPartners();
+  if (muted) o[partnerId] = true; else delete o[partnerId];
+  localStorage.setItem(CHAT_MUTED_KEY, JSON.stringify(o));
+  return o;
+}
+
 const NOTIFICATION_SOUND = 'data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdH2AhYaHiIaGhYSEgoGAf39/f39/gIGBgoODhIWFhYWFhYSEg4KBgH9/fn5+fn5/f4CBgoOEhIWFhYWEhIOCgYF/fn5+fn5+f4CAgYKDhISEhISEg4OCgYB/fn59fX5+fn+AgIGCg4OEhISEg4OCgYB/fn59fX5+fn+AgIGCgoODg4ODg4KBgH9+fX19fn5+f4CAgYKCg4ODg4OCgYGAf359fX19fn5/f4CAgYKCg4ODg4KCgYB/fn19fX19fn5/f4CAgYGCgoKCgoKBgH9+fX19fX5+fn+AgICBgYKCgoKCgYB/f359fX19fn5+f3+AgIGBgoKCgoGBgH9+fn19fX1+fn5/f4CAgYGBgYGBgYB/f359fX19fn5+fn9/gICAgYGBgYGAf39+fn19fX1+fn5+f3+AgICBgYGBgIB/f359fX19fX5+fn5/f4CAgICAgICAgH9/fn59fX19fX5+fn9/f4CAgICAgIB/f39+fn19fX19fn5+fn9/f4CAgICAgH9/f359fX19fX19fn5+fn9/f4CAgICAgH9/fn5+fX19fX19fn5+fn9/f39/f39/f39+fn59fX19fX19fn5+fn9/f39/f39/f35+fn59fX19fX19fn5+fn5/f39/f39/f35+fn59fX19fX19fX5+fn5+f39/f39/f35+fn59fX19fX19fX5+fn5+fn9/f39/f35+fn59fX19fX19fX5+fn5+fn5/f39/f35+fn59fX19fX19fX5+fn5+fn5/f39/f39+fn59fX19fX19fX5+fn5+fn5+f39/f39+fn59fX19fX19fX1+fn5+fn5+fn9/f39+fn59fX19fX19fX1+fn5+fn5+fn5/f39+fn59fX19fX19fX1+fn5+fn5+fn5+f39+fn59fX19fX19fX1+fn5+fn5+fn5+fn5+fn59fX19fX19fX1+fn5+fn5+fn5+fn5+fn59fX19fX19fX19fn5+fn5+fn5+fn5+fn59fX19fX19fX19fn5+fn5+fn5+fn5+fn5+fX19fX19fX19fX5+fn5+fn5+fn5+fn5+fX19fX19fX19fX1+fn5+fn5+fn5+fn5+fn19fX19fX19fX19fn5+fn5+fn5+fn5+fn59fX19fX19fX19fX5+fn5+fn5+fn5+fn5+fX19fX19fX19fX1+fn5+fn5+fn5+fn5+fn19fX19fX19fX19fn5+fn5+fn5+fn5+fn59fX19fX19fX19fX5+fn5+fn5+fn5+fn5+fX19fX19fX19fX1+fn5+fn5+fn5+fn5+fn59fX19fX19fX19fn5+fn5+fn5+fn5+fn59fX19fX19fX19fX5+fn5+fn5+fn5+fn5+fX19fX19fX19fX1+fn5+fn5+fn5+fn5+fn59fX19fX19fX19fX5+fn5+fn5+fn5+fn5+fn59fX19fX19fX1+fn5+fn5+fn5+fn5+fn5+fX19fX19fX19fn5+fn5+fn5+fn5+fn5+fn59fX19fX19fn5+fn5+fn5+fn5+fn5+fn5+fn59fX19fn5+fn5+fn5+fn5+fn5+fn5+fn59fX5+fn5+fn5+fn5+fn5+fn5+fn5+fn59fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5';
 const QUICK_EMOJIS = ['😀', '😂', '😍', '🥰', '😊', '👍', '❤️', '🔥', '👏', '🎉', '😢', '😮'];
 
@@ -197,6 +212,41 @@ function chatReducer(state, action) {
                 unreadTotal: Math.max(0, state.unreadTotal - unreadToRemove)
             };
         }
+
+        case 'UPDATE_MESSAGES_READ': {
+            const { partnerId, myId } = action.payload;
+            const newMessages = state.currentMessages.map(m => {
+                const sender = m.from?.vnu_id || m.sender;
+                const receiver = m.to?.vnu_id || m.receiver;
+                if (sender === myId && receiver === partnerId) return { ...m, is_read: true };
+                return m;
+            });
+            return { ...state, currentMessages: newMessages };
+        }
+
+        case 'RECALL_MESSAGE': {
+            const { messageId } = action.payload;
+            const newMessages = state.currentMessages.map(m =>
+                m._id === messageId ? { ...m, message: "Tin nhắn đã được thu hồi", type: "recalled", attachment_url: null } : m
+            );
+            return { ...state, currentMessages: newMessages };
+        }
+
+        case 'EDIT_MESSAGE': {
+            const { messageId, message: newText, editedAt } = action.payload;
+            const newMessages = state.currentMessages.map(m =>
+                m._id === messageId ? { ...m, message: newText, editedAt } : m
+            );
+            return { ...state, currentMessages: newMessages };
+        }
+
+        case 'UPDATE_MESSAGE_REACTIONS': {
+            const { messageId, reactions } = action.payload;
+            const newMessages = state.currentMessages.map(m =>
+                m._id === messageId ? { ...m, reactions: reactions || [] } : m
+            );
+            return { ...state, currentMessages: newMessages };
+        }
         
         case 'SET_LOADING':
             return { ...state, isLoading: action.payload };
@@ -224,6 +274,10 @@ export default function ChatWidget() {
     const [uploading, setUploading] = useState(false);
     const [previewImage, setPreviewImage] = useState(null);
     const [typingUsers, setTypingUsers] = useState(new Set());
+    const [editingMessageId, setEditingMessageId] = useState(null);
+    const [editingText, setEditingText] = useState('');
+    const [searchInChat, setSearchInChat] = useState('');
+    const [mutedPartners, setMutedPartners] = useState(getMutedPartners);
     const [lastTypingTime, setLastTypingTime] = useState(0);
     
     // Menu state
@@ -423,15 +477,17 @@ export default function ChatWidget() {
                 payload: { message: msg, partnerId: currentSelectedId, myId: myStudentCode }
             });
 
-            // Play notification sound and show desktop notification
+            // Play notification sound and show desktop notification (trừ khi đã tắt thông báo cuộc chat này)
             if (!drawerOpenRef.current || currentSelectedId !== senderId) {
-                playNotificationSound();
-                if (Notification.permission === 'granted') {
-                    new Notification(`Tin nhắn từ ${msg.from?.name || 'Người dùng'}`, {
-                        body: msg.type === 'image' ? '📷 Đã gửi một hình ảnh' : msg.message,
-                        icon: '/favicon.ico',
-                        tag: `chat-${senderId}`
+                if (!mutedPartners[senderId]) {
+                    playNotificationSound();
+                    if (Notification.permission === 'granted') {
+                        new Notification(`Tin nhắn từ ${msg.from?.name || 'Người dùng'}`, {
+                            body: msg.type === 'image' ? '📷 Đã gửi một hình ảnh' : msg.message,
+                            icon: '/favicon.ico',
+                            tag: `chat-${senderId}`
                     });
+                    }
                 }
             }
         };
@@ -448,18 +504,42 @@ export default function ChatWidget() {
             }
         };
 
+        const handleMessagesRead = (data) => {
+            if (data.by) dispatch({ type: 'UPDATE_MESSAGES_READ', payload: { partnerId: data.by, myId: myStudentCode } });
+        };
+
+        const handleMessageDeleted = (data) => {
+            if (data.messageId) dispatch({ type: 'RECALL_MESSAGE', payload: { messageId: data.messageId } });
+        };
+
+        const handleMessageUpdated = (data) => {
+            if (data._id && data.message != null) dispatch({ type: 'EDIT_MESSAGE', payload: { messageId: data._id, message: data.message, editedAt: data.editedAt } });
+        };
+
+        const handleMessageReaction = (data) => {
+            if (data.messageId && data.reactions) dispatch({ type: 'UPDATE_MESSAGE_REACTIONS', payload: { messageId: data.messageId, reactions: data.reactions } });
+        };
+
         socket.on('UserTyping', handleTyping);
         socket.on('UserStopTyping', handleStopTyping);
         socket.on('NewMessage', handleNewMessage);
         socket.on('ConversationDeleted', handleConversationDeleted);
+        socket.on('MessagesRead', handleMessagesRead);
+        socket.on('MessageDeleted', handleMessageDeleted);
+        socket.on('MessageUpdated', handleMessageUpdated);
+        socket.on('MessageReaction', handleMessageReaction);
 
         return () => {
             socket.off('UserTyping', handleTyping);
             socket.off('UserStopTyping', handleStopTyping);
             socket.off('NewMessage', handleNewMessage);
             socket.off('ConversationDeleted', handleConversationDeleted);
+            socket.off('MessagesRead', handleMessagesRead);
+            socket.off('MessageDeleted', handleMessageDeleted);
+            socket.off('MessageUpdated', handleMessageUpdated);
+            socket.off('MessageReaction', handleMessageReaction);
         };
-    }, [myStudentCode, playNotificationSound]);
+    }, [myStudentCode, playNotificationSound, mutedPartners]);
 
     useEffect(() => {
         if (Notification.permission === 'default') Notification.requestPermission();
@@ -629,9 +709,12 @@ export default function ChatWidget() {
             case 'archive':
                 message.info('📦 Tính năng Lưu trữ đang phát triển');
                 break;
-            case 'mute':
-                message.info('🔕 Tính năng Tắt thông báo đang phát triển');
+            case 'mute': {
+                const next = setMutedPartner(partnerId, !mutedPartners[partnerId]);
+                setMutedPartners({ ...next });
+                message.success(next[partnerId] ? '🔕 Đã tắt thông báo cuộc chat này' : '🔔 Đã bật thông báo');
                 break;
+            }
             case 'mark_unread':
                 dispatch({ type: 'MARK_UNREAD', payload: { partnerId } });
                 message.success('✉️ Đã đánh dấu là chưa đọc');
@@ -645,7 +728,7 @@ export default function ChatWidget() {
             default:
                 break;
         }
-    }, []);
+    }, [mutedPartners]);
 
     // ============================================
     // DELETE CONVERSATION
@@ -707,6 +790,82 @@ export default function ChatWidget() {
         return false;
     }, [selectedUser, auth]);
 
+    const handleFileUpload = useCallback(async (file) => {
+        if (!selectedUser) return false;
+        const userId = selectedUser.vnu_id || selectedUser.student_code;
+        setUploading(true);
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('to', userId);
+        try {
+            const response = await fetch(`${API_BASE}/api/chat/upload-file`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${auth}` },
+                body: formData
+            });
+            const data = await response.json();
+            if (data.status === 'Success' && data.data) {
+                dispatch({ type: 'ADD_MESSAGE', payload: { message: { ...data.data, isSender: true, selfSend: true }, partnerId: userId, myId: myStudentCode } });
+            } else {
+                message.error(data.message || 'Lỗi tải file');
+            }
+        } catch (err) {
+            message.error('Lỗi kết nối');
+        } finally {
+            setUploading(false);
+        }
+        return false;
+    }, [selectedUser, auth]);
+
+    const handleRecallMessage = useCallback(async (messageId) => {
+        try {
+            const res = await fetch(`${API_BASE}/api/chat/message/${messageId}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${auth}` } });
+            const data = await res.json();
+            if (data.status === 'Success') {
+                dispatch({ type: 'RECALL_MESSAGE', payload: { messageId } });
+            } else {
+                message.error(data.message || 'Không thể thu hồi');
+            }
+        } catch (err) {
+            message.error('Lỗi kết nối');
+        }
+    }, [auth]);
+
+    const handleEditMessage = useCallback(async (messageId, newText) => {
+        try {
+            const res = await fetch(`${API_BASE}/api/chat/message/${messageId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${auth}` },
+                body: JSON.stringify({ message: newText })
+            });
+            const data = await res.json();
+            if (data.status === 'Success' && data.data) {
+                dispatch({ type: 'EDIT_MESSAGE', payload: { messageId, message: data.data.message, editedAt: data.data.editedAt } });
+                setEditingMessageId(null);
+                setEditingText('');
+            } else {
+                message.error(data.message || 'Không thể sửa');
+            }
+        } catch (err) {
+            message.error('Lỗi kết nối');
+        }
+    }, [auth]);
+
+    const openEditModal = (id, text) => { setEditingMessageId(id); setEditingText(text || ''); };
+
+    const REACTION_EMOJIS = ['👍', '❤️', '😢', '🔥', '👏'];
+    const handleReaction = useCallback(async (messageId, emoji) => {
+        try {
+            const res = await fetch(`${API_BASE}/api/chat/message/${messageId}/reaction`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${auth}` },
+                body: JSON.stringify({ emoji })
+            });
+            const data = await res.json();
+            if (data.status === 'Success' && data.data) dispatch({ type: 'UPDATE_MESSAGE_REACTIONS', payload: { messageId: data.data.messageId, reactions: data.data.reactions } });
+        } catch (_) {}
+    }, [auth]);
+
     // ============================================
     // FORMAT MESSAGES
     // ============================================
@@ -729,12 +888,17 @@ export default function ChatWidget() {
                 senderName: msg.from?.name || senderId,
                 time,
                 timestamp,
-                is_read: msg.is_read
+                is_read: msg.is_read,
+                editedAt: msg.editedAt,
+                reactions: msg.reactions || []
             };
         });
     }, [state.currentMessages, myStudentCode]);
 
     const formattedMessages = formatMessages();
+    const messagesToShow = searchInChat.trim()
+        ? formattedMessages.filter(m => (m.text || '').toLowerCase().includes(searchInChat.trim().toLowerCase()))
+        : formattedMessages;
     const contactList = searchText.trim() 
         ? searchResults.map(u => ({
             partner_id: u.vnu_id,
@@ -753,7 +917,8 @@ export default function ChatWidget() {
     // RENDER MESSAGE BUBBLE
     // ============================================
     const renderMessageBubble = (msg, idx, messages) => {
-        const { isMine, text, time, id, type, attachment_url } = msg;
+        const { isMine, text, time, id, type, attachment_url, editedAt, reactions = [] } = msg;
+        const reactionGroups = reactions.reduce((acc, r) => { acc[r.emoji] = (acc[r.emoji] || 0) + 1; return acc; }, {});
         const prevMsg = messages[idx - 1];
         const nextMsg = messages[idx + 1];
         const isFirstInSequence = !prevMsg || prevMsg.isMine !== isMine;
@@ -774,22 +939,55 @@ export default function ChatWidget() {
             };
         };
 
+        const fileUrl = attachment_url ? `${API_BASE}${attachment_url}` : null;
         return (
-            <div key={id || idx} style={{ display: 'flex', flexDirection: 'column', alignItems: isMine ? 'flex-end' : 'flex-start', marginBottom: isLastInSequence ? 8 : 2 }}>
-                {type === 'image' && attachment_url ? (
-                    <div style={{ maxWidth: '75%', ...getBorderRadius(), overflow: 'hidden', cursor: 'pointer', boxShadow: '0 1px 2px rgba(0,0,0,0.1)' }}
-                         onClick={() => setPreviewImage(`${API_BASE}${attachment_url}`)}>
-                        <img src={`${API_BASE}${attachment_url}`} alt="Sent" style={{ maxWidth: '100%', maxHeight: 200, display: 'block', borderRadius: 'inherit' }} />
+            <div key={id || idx} className="chat-bubble-row" style={{ display: 'flex', flexDirection: 'column', alignItems: isMine ? 'flex-end' : 'flex-start', marginBottom: isLastInSequence ? 10 : 3 }}>
+                {type === 'image' && fileUrl ? (
+                    <div className="chat-bubble chat-bubble-image" style={{ maxWidth: '75%', ...getBorderRadius(), overflow: 'hidden', cursor: 'pointer' }}
+                         onClick={() => setPreviewImage(fileUrl)}>
+                        <img src={fileUrl} alt="Sent" style={{ maxWidth: '100%', maxHeight: 220, display: 'block', borderRadius: 'inherit' }} />
                     </div>
+                ) : type === 'file' && fileUrl ? (
+                    <a href={fileUrl} target="_blank" rel="noopener noreferrer" className={`chat-bubble ${isMine ? 'chat-bubble-mine' : 'chat-bubble-theirs'}`} style={{ maxWidth: '75%', padding: '12px 16px', ...getBorderRadius(), wordBreak: 'break-word', display: 'inline-flex', alignItems: 'center', gap: 8, textDecoration: 'none', color: 'inherit' }}>
+                        <FilePdfOutlined style={{ fontSize: 20 }} />
+                        <span className="chat-bubble-text">{text}</span>
+                    </a>
                 ) : (
-                    <div style={{ maxWidth: '75%', padding: '10px 14px', ...getBorderRadius(), backgroundColor: isMine ? '#0084ff' : '#e4e6eb', color: isMine ? '#ffffff' : '#050505', wordBreak: 'break-word', boxShadow: '0 1px 2px rgba(0,0,0,0.1)' }}>
-                        <div style={{ fontSize: 14, lineHeight: 1.4 }}>{text}</div>
+                    <div className={`chat-bubble ${isMine ? 'chat-bubble-mine' : 'chat-bubble-theirs'} ${type === 'recalled' ? 'chat-bubble-recalled' : ''}`} style={{ maxWidth: '75%', padding: '12px 16px', ...getBorderRadius(), wordBreak: 'break-word' }}>
+                        <div className="chat-bubble-text">{text}</div>
+                        {editedAt && <div className="chat-edited-label">Đã chỉnh sửa</div>}
                     </div>
                 )}
+                {isMine && type !== 'recalled' && (
+                    <span style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 2 }}>
+                        {(type === 'text' || !type) && <span className="chat-recall-link" onClick={() => openEditModal(id, text)}>Sửa</span>}
+                        <Popconfirm title="Thu hồi tin nhắn?" onConfirm={() => handleRecallMessage(id)} okText="Thu hồi" cancelText="Hủy">
+                            <span className="chat-recall-link">Thu hồi</span>
+                        </Popconfirm>
+                    </span>
+                )}
+                {(reactionGroups && Object.keys(reactionGroups).length > 0) && (
+                    <div className="chat-reactions-wrap" style={{ marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                        {Object.entries(reactionGroups).map(([emoji, count]) => (
+                            <span key={emoji} className="chat-reaction-chip" onClick={() => handleReaction(id, emoji)} title="Bấm để bỏ reaction">
+                                {emoji} {count > 1 ? count : ''}
+                            </span>
+                        ))}
+                    </div>
+                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                    {REACTION_EMOJIS.map(emoji => (
+                        <span key={emoji} className="chat-reaction-btn" onClick={() => handleReaction(id, emoji)}>{emoji}</span>
+                    ))}
+                </div>
                 {isLastInSequence && time && (
-                    <div style={{ fontSize: 11, color: '#65676b', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <div className="chat-bubble-meta">
                         {time}
-                        {isMine && msg.is_read && <CheckOutlined style={{ fontSize: 10, color: '#0084ff' }} />}
+                        {isMine && (
+                            msg.is_read
+                                ? <span className="chat-ticks read" title="Đã đọc"><CheckOutlined style={{ fontSize: 10 }} /><CheckOutlined style={{ fontSize: 10, marginLeft: -6 }} /></span>
+                                : <span className="chat-ticks sent" title="Đã gửi"><CheckOutlined style={{ fontSize: 10 }} /></span>
+                        )}
                     </div>
                 )}
             </div>
@@ -822,7 +1020,7 @@ export default function ChatWidget() {
                     Lưu trữ
                 </Menu.Item>
                 <Menu.Item key="mute" icon={<BellOutlined />} onClick={() => handleMenuAction('mute', partnerId)}>
-                    Tắt thông báo
+                    {mutedPartners[partnerId] ? 'Bật thông báo' : 'Tắt thông báo'}
                 </Menu.Item>
                 <Menu.Item key="mark_unread" icon={<EyeInvisibleOutlined />} onClick={() => handleMenuAction('mark_unread', partnerId)}>
                     Đánh dấu chưa đọc
@@ -927,6 +1125,7 @@ export default function ChatWidget() {
 
             {/* Chat Drawer */}
             <Drawer
+                className="chat-drawer"
                 title={
                     selectedUser ? (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -939,7 +1138,7 @@ export default function ChatWidget() {
                                     {selectedUser.name || selectedUser.vnu_id}
                                 </div>
                                 <div style={{ fontSize: 12, color: isOtherTyping ? '#0084ff' : '#65676b' }}>
-                                    {isOtherTyping ? 'Đang nhập...' : (isSocketConnected ? '● Đang hoạt động' : '○ Offline')}
+                                    {isOtherTyping ? `${selectedUser.name || 'Người dùng'} đang nhập...` : (isSocketConnected ? '● Đang hoạt động' : '○ Offline')}
                                 </div>
                             </div>
                             <Popconfirm title="Xóa cuộc trò chuyện?" description="Tất cả tin nhắn sẽ bị xóa vĩnh viễn."
@@ -991,9 +1190,16 @@ export default function ChatWidget() {
                 ) : (
                     // Chat View
                     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                        <div style={{ padding: '8px 12px', borderBottom: '1px solid #e4e6eb', background: '#f8f9fa' }}>
+                            <Input placeholder="Tìm trong cuộc trò chuyện..." prefix={<SearchOutlined style={{ color: '#8a8d91' }} />}
+                                value={searchInChat} onChange={(e) => setSearchInChat(e.target.value)}
+                                allowClear style={{ borderRadius: 20 }} />
+                        </div>
                         <div style={{ flex: 1, overflow: 'auto', padding: '12px 12px 4px 12px', display: 'flex', flexDirection: 'column', background: '#ffffff' }}>
-                            {formattedMessages.length > 0 ? (
-                                formattedMessages.map((msg, idx) => renderMessageBubble(msg, idx, formattedMessages))
+                            {messagesToShow.length > 0 ? (
+                                messagesToShow.map((msg, idx) => renderMessageBubble(msg, idx, messagesToShow))
+                            ) : formattedMessages.length > 0 ? (
+                                <div style={{ padding: 12, color: '#65676b', textAlign: 'center' }}>Không có tin nhắn nào khớp &quot;{searchInChat}&quot;</div>
                             ) : (
                                 <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100%', color: '#65676b', gap: 12 }}>
                                     <Avatar icon={<UserOutlined />} size={64} style={{ backgroundColor: '#0084ff' }} />
@@ -1003,10 +1209,11 @@ export default function ChatWidget() {
                             )}
                             {isOtherTyping && (
                                 <div style={{ display: 'flex', alignItems: 'flex-start', marginBottom: 8 }}>
-                                    <div style={{ padding: '10px 14px', borderRadius: 18, backgroundColor: '#e4e6eb', display: 'flex', gap: 4 }}>
+                                    <div className="chat-typing-bubble" style={{ padding: '10px 14px', borderRadius: 18, backgroundColor: '#e4e6eb', display: 'flex', alignItems: 'center', gap: 6 }}>
                                         <span className="typing-dot" style={{ animationDelay: '0ms' }}>•</span>
                                         <span className="typing-dot" style={{ animationDelay: '150ms' }}>•</span>
                                         <span className="typing-dot" style={{ animationDelay: '300ms' }}>•</span>
+                                        <span style={{ fontSize: 12, color: '#65676b', marginLeft: 2 }}>đang gõ</span>
                                     </div>
                                 </div>
                             )}
@@ -1021,9 +1228,12 @@ export default function ChatWidget() {
                             </div>
                         )}
 
-                        <div style={{ padding: '8px 12px 12px 12px', borderTop: '1px solid #e4e6eb', display: 'flex', gap: 8, alignItems: 'flex-end', background: '#ffffff' }}>
+                        <div className="chat-compose-wrap" style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
                             <Upload accept="image/*" showUploadList={false} beforeUpload={handleImageUpload} disabled={uploading}>
-                                <Button type="text" icon={uploading ? <LoadingOutlined /> : <PictureOutlined />} style={{ color: '#0084ff' }} disabled={uploading} />
+                                <Tooltip title="Gửi ảnh"><Button type="text" icon={uploading ? <LoadingOutlined /> : <PictureOutlined />} style={{ color: '#0084ff' }} disabled={uploading} /></Tooltip>
+                            </Upload>
+                            <Upload accept=".pdf,.doc,.docx,image/*" showUploadList={false} beforeUpload={handleFileUpload} disabled={uploading}>
+                                <Tooltip title="Gửi file (PDF, Word)"><Button type="text" icon={<PaperClipOutlined />} style={{ color: '#0084ff' }} disabled={uploading} /></Tooltip>
                             </Upload>
                             <Button type="text" icon={<SmileOutlined />} onClick={() => setShowEmojiPicker(!showEmojiPicker)} style={{ color: showEmojiPicker ? '#0084ff' : '#65676b' }} />
                             <Input.TextArea
@@ -1040,6 +1250,19 @@ export default function ChatWidget() {
                     </div>
                 )}
             </Drawer>
+
+            {/* Edit Message Modal */}
+            <Modal
+                title="Sửa tin nhắn"
+                open={!!editingMessageId}
+                onOk={() => editingMessageId && editingText.trim() && handleEditMessage(editingMessageId, editingText.trim())}
+                onCancel={() => { setEditingMessageId(null); setEditingText(''); }}
+                okText="Lưu"
+                cancelText="Hủy"
+                destroyOnClose
+            >
+                <Input.TextArea rows={4} value={editingText} onChange={(e) => setEditingText(e.target.value)} placeholder="Nội dung tin nhắn" />
+            </Modal>
 
             {/* Delete Confirmation Modal */}
             <Modal

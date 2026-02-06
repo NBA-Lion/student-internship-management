@@ -39,7 +39,18 @@ const MessageSchema = new mongoose.Schema(
     },
     
     // Thời gian đọc
-    read_at: { type: Date }
+    read_at: { type: Date },
+
+    // Thu hồi tin nhắn (chỉ ẩn nội dung, không xóa bản ghi)
+    deleted: { type: Boolean, default: false },
+    deletedAt: { type: Date },
+    deletedBy: { type: String },
+
+    // Sửa tin nhắn
+    editedAt: { type: Date },
+
+    // Reaction: [{ emoji: String, by: String (student_code) }]
+    reactions: { type: [{ emoji: String, by: String }], default: [] }
   },
   { 
     timestamps: true // createdAt, updatedAt

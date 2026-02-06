@@ -8,6 +8,7 @@ export default function Compose(props) {
   const [inputValue, setInputValue] = useState("");
   const onChangeInput = (e) => {
     setInputValue(e.target.value);
+    if (props.onTyping) props.onTyping();
   }
   const onSendMessage = props.onSendMessage ? props.onSendMessage : () => {}  
   const onKeyDown = (e) => {

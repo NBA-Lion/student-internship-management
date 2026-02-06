@@ -1,5 +1,6 @@
 import React from 'react';
 import moment from 'moment';
+import { CheckOutlined } from '@ant-design/icons';
 import './Message.css';
 
 export default function Message(props) {
@@ -8,10 +9,13 @@ export default function Message(props) {
       isMine,
       startsSequence,
       endsSequence,
-      showTimestamp
+      showTimestamp,
+      isRead
     } = props;
 
     const friendlyTimestamp = moment(data.timestamp).format('LLLL');
+    const shortTime = moment(data.timestamp).format('HH:mm');
+
     return (
       <div className={[
         'message',
@@ -30,6 +34,15 @@ export default function Message(props) {
           <div className="bubble" title={friendlyTimestamp}>
             { data.message }
           </div>
+          {endsSequence && isMine && (
+            <span className="message-status" title={isRead ? 'Đã đọc' : 'Đã gửi'}>
+              {isRead
+                ? <span className="read-ticks"><CheckOutlined /><CheckOutlined /></span>
+                : <CheckOutlined className="sent-tick" />
+              }
+            </span>
+          )}
+          {endsSequence && <span className="message-time">{shortTime}</span>}
         </div>
       </div>
     );

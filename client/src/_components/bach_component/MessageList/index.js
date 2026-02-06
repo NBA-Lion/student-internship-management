@@ -21,9 +21,11 @@ export default function MessageList(props) {
   const [fetchDone, setFetchDone] = useState(false);
   const [isHidden, setIsHidden] = useState(true);
   const [targetName, setTargetName] = useState('');
+  const [partnerTyping, setPartnerTyping] = useState(false);
 
   const messageEnd = useRef(null);
   const messageListRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
 
   const chatAction = useChatAction();
   const chatWrapper = useChatWrapper();
@@ -140,9 +142,87 @@ export default function MessageList(props) {
       id: result._id,
       author: result.from?.vnu_id || result.sender,
       message: result.message || result.content,
-      timestamp: new Date(result.createdDate || result.createdAt || result.timestamp)
+      timestamp: new Date(result.createdDate || result.createdAt || result.timestamp),
+      is_read: !!result.is_read
     }));
   }, [chatWrapper.curListMessages, fetchDone, currentUserId, partnerId]);
+
+  // Cập nhật "đã đọc" khi bên kia đọc tin (hiện 2 tick)
+  useEffect(() => {
+    if (!socketWrapper.socket || !currentUserId || !partnerId) return;
+    const handleMessagesRead = (data) => {
+      if (data.by !== partnerId) return;
+      chatWrapper.setCurListMessage(prev => {
+        const list = prev || [];
+        return list.map(m => {
+          const sender = m.from?.vnu_id || m.sender;
+          const receiver = m.to?.vnu_id || m.receiver;
+          if (sender === currentUserId && receiver === partnerId) return { ...m, is_read: true };
+          return m;
+        });
+      });
+    };
+    socketWrapper.socket.on('MessagesRead', handleMessagesRead);
+    return () => socketWrapper.socket.off('MessagesRead', handleMessagesRead);
+  }, [currentUserId, partnerId, chatWrapper]);
+
+  // Đang gõ: nhận từ partner và gửi Typing/StopTyping khi mình gõ
+  useEffect(() => {
+    if (!socketWrapper.socket || !partnerId) return;
+    const handleTyping = (data) => { if (data.from === partnerId) setPartnerTyping(true); };
+    const handleStopTyping = (data) => { if (data.from === partnerId) setPartnerTyping(false); };
+    socketWrapper.socket.on('UserTyping', handleTyping);
+    socketWrapper.socket.on('UserStopTyping', handleStopTyping);
+    return () => {
+      socketWrapper.socket.off('UserTyping', handleTyping);
+      socketWrapper.socket.off('UserStopTyping', handleStopTyping);
+    };
+  }, [partnerId]);
+
+  const emitTyping = useCallback(() => {
+    if (!partnerId || !socketWrapper.socket) return;
+    socketWrapper.socket.emit('Typing', { to: partnerId });
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      socketWrapper.socket.emit('StopTyping', { to: partnerId });
+    }, 3000);
+  }, [partnerId]);
+
+  useEffect(() => {
+    if (!socketWrapper.socket || !partnerId) return;
+    const handleMessageDeleted = (data) => {
+      if (!data.messageId) return;
+      chatWrapper.setCurListMessage(prev => (prev || []).map(m =>
+        m._id === data.messageId ? { ...m, message: 'Tin nhắn đã được thu hồi', type: 'recalled', attachment_url: null } : m
+      ));
+    };
+    socketWrapper.socket.on('MessageDeleted', handleMessageDeleted);
+    return () => socketWrapper.socket.off('MessageDeleted', handleMessageDeleted);
+  }, [partnerId, chatWrapper]);
+
+  useEffect(() => {
+    if (!socketWrapper.socket || !partnerId) return;
+    const handleMessageUpdated = (data) => {
+      if (!data._id || data.message == null) return;
+      chatWrapper.setCurListMessage(prev => (prev || []).map(m =>
+        m._id === data._id ? { ...m, message: data.message, editedAt: data.editedAt } : m
+      ));
+    };
+    socketWrapper.socket.on('MessageUpdated', handleMessageUpdated);
+    return () => socketWrapper.socket.off('MessageUpdated', handleMessageUpdated);
+  }, [partnerId, chatWrapper]);
+
+  useEffect(() => {
+    if (!socketWrapper.socket || !partnerId) return;
+    const handleMessageReaction = (data) => {
+      if (!data.messageId || !data.reactions) return;
+      chatWrapper.setCurListMessage(prev => (prev || []).map(m =>
+        m._id === data.messageId ? { ...m, reactions: data.reactions } : m
+      ));
+    };
+    socketWrapper.socket.on('MessageReaction', handleMessageReaction);
+    return () => socketWrapper.socket.off('MessageReaction', handleMessageReaction);
+  }, [partnerId, chatWrapper]);
 
   // ============================================
   // AUTO-SCROLL TO BOTTOM ON NEW MESSAGES
@@ -206,6 +286,7 @@ export default function MessageList(props) {
           startsSequence={startsSequence}
           endsSequence={endsSequence}
           showTimestamp={showTimestamp}
+          isRead={current.is_read}
           data={current}
         />
       );
@@ -217,8 +298,8 @@ export default function MessageList(props) {
     return(
       <div className="message-list">
         <Toolbar
-        className="conversation-title-toolbar"
-          title={"Trao đổi với " + targetName}
+          className="conversation-title-toolbar"
+          title={partnerTyping ? `${targetName} đang nhập...` : `Trao đổi với ${targetName}`}
         />
 
         <div  className="message-list-container">{renderMessages()}
@@ -226,7 +307,7 @@ export default function MessageList(props) {
               ref={messageEnd}>
           </div>
         </div>
-        <Compose onSendMessage={chatAction.onSendMessage} visible={!isHidden}/>
+        <Compose onSendMessage={chatAction.onSendMessage} onTyping={emitTyping} visible={!isHidden}/>
         
       </div>
     );

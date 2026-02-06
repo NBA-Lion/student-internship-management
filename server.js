@@ -207,6 +207,7 @@ io.on("connection", async (socket) => {
         createdDate: newMessage.createdAt,
         timestamp: newMessage.createdAt,
         type: newMessage.type,
+        is_read: false,
         newContact: isNewContact
       };
 
