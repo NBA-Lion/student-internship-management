@@ -283,6 +283,8 @@ export default function ChatWidget() {
     // Menu state
     const [activeMenuId, setActiveMenuId] = useState(null);
     const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+    // Chỉ hiện Sửa / Thu hồi / reaction khi bấm vào tin nhắn
+    const [selectedMessageId, setSelectedMessageId] = useState(null);
     
     // Complex state with reducer
     const [state, dispatch] = useReducer(chatReducer, initialState);
@@ -314,10 +316,13 @@ export default function ChatWidget() {
             if (activeMenuId && menuRef.current && !menuRef.current.contains(event.target)) {
                 setActiveMenuId(null);
             }
+            if (selectedMessageId && !event.target.closest('.chat-bubble-row')) {
+                setSelectedMessageId(null);
+            }
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, [activeMenuId]);
+    }, [activeMenuId, selectedMessageId]);
 
     // ============================================
     // NOTIFICATION SOUND
@@ -818,6 +823,10 @@ export default function ChatWidget() {
     }, [selectedUser, auth]);
 
     const handleRecallMessage = useCallback(async (messageId) => {
+        if (String(messageId).startsWith('temp_')) {
+            message.warning('Vui lòng đợi tin nhắn được gửi xong');
+            return;
+        }
         try {
             const res = await fetch(`${API_BASE}/api/chat/message/${messageId}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${auth}` } });
             const data = await res.json();
@@ -832,6 +841,10 @@ export default function ChatWidget() {
     }, [auth]);
 
     const handleEditMessage = useCallback(async (messageId, newText) => {
+        if (String(messageId).startsWith('temp_')) {
+            message.warning('Vui lòng đợi tin nhắn được gửi xong');
+            return;
+        }
         try {
             const res = await fetch(`${API_BASE}/api/chat/message/${messageId}`, {
                 method: 'PUT',
@@ -855,6 +868,10 @@ export default function ChatWidget() {
 
     const REACTION_EMOJIS = ['👍', '❤️', '😢', '🔥', '👏'];
     const handleReaction = useCallback(async (messageId, emoji) => {
+        if (String(messageId).startsWith('temp_')) {
+            message.warning('Vui lòng đợi tin nhắn được gửi xong');
+            return;
+        }
         try {
             const res = await fetch(`${API_BASE}/api/chat/message/${messageId}/reaction`, {
                 method: 'POST',
@@ -940,11 +957,16 @@ export default function ChatWidget() {
         };
 
         const fileUrl = attachment_url ? `${API_BASE}${attachment_url}` : null;
+        const isSelected = selectedMessageId === (id || msg._id);
+        const toggleSelect = (e) => {
+            if (e.target.closest('.chat-recall-link, .chat-reaction-chip, .chat-reaction-btn, .ant-popover')) return;
+            setSelectedMessageId(prev => (prev === (id || msg._id) ? null : (id || msg._id)));
+        };
         return (
             <div key={id || idx} className="chat-bubble-row" style={{ display: 'flex', flexDirection: 'column', alignItems: isMine ? 'flex-end' : 'flex-start', marginBottom: isLastInSequence ? 10 : 3 }}>
                 {type === 'image' && fileUrl ? (
                     <div className="chat-bubble chat-bubble-image" style={{ maxWidth: '75%', ...getBorderRadius(), overflow: 'hidden', cursor: 'pointer' }}
-                         onClick={() => setPreviewImage(fileUrl)}>
+                         onClick={(e) => { e.stopPropagation(); if (isSelected) setPreviewImage(fileUrl); else toggleSelect(e); }}>
                         <img src={fileUrl} alt="Sent" style={{ maxWidth: '100%', maxHeight: 220, display: 'block', borderRadius: 'inherit' }} />
                     </div>
                 ) : type === 'file' && fileUrl ? (
@@ -953,33 +975,37 @@ export default function ChatWidget() {
                         <span className="chat-bubble-text">{text}</span>
                     </a>
                 ) : (
-                    <div className={`chat-bubble ${isMine ? 'chat-bubble-mine' : 'chat-bubble-theirs'} ${type === 'recalled' ? 'chat-bubble-recalled' : ''}`} style={{ maxWidth: '75%', padding: '12px 16px', ...getBorderRadius(), wordBreak: 'break-word' }}>
+                    <div className={`chat-bubble ${isMine ? 'chat-bubble-mine' : 'chat-bubble-theirs'} ${type === 'recalled' ? 'chat-bubble-recalled' : ''}`} style={{ maxWidth: '75%', padding: '12px 16px', ...getBorderRadius(), wordBreak: 'break-word', cursor: 'pointer' }} onClick={toggleSelect}>
                         <div className="chat-bubble-text">{text}</div>
                         {editedAt && <div className="chat-edited-label">Đã chỉnh sửa</div>}
                     </div>
                 )}
-                {isMine && type !== 'recalled' && (
-                    <span style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 2 }}>
-                        {(type === 'text' || !type) && <span className="chat-recall-link" onClick={() => openEditModal(id, text)}>Sửa</span>}
-                        <Popconfirm title="Thu hồi tin nhắn?" onConfirm={() => handleRecallMessage(id)} okText="Thu hồi" cancelText="Hủy">
-                            <span className="chat-recall-link">Thu hồi</span>
-                        </Popconfirm>
-                    </span>
-                )}
-                {(reactionGroups && Object.keys(reactionGroups).length > 0) && (
-                    <div className="chat-reactions-wrap" style={{ marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                        {Object.entries(reactionGroups).map(([emoji, count]) => (
-                            <span key={emoji} className="chat-reaction-chip" onClick={() => handleReaction(id, emoji)} title="Bấm để bỏ reaction">
-                                {emoji} {count > 1 ? count : ''}
+                {isSelected && (
+                    <>
+                        {isMine && type !== 'recalled' && (
+                            <span style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 2 }}>
+                                {(type === 'text' || !type) && <span className="chat-recall-link" onClick={() => openEditModal(id, text)}>Sửa</span>}
+                                <Popconfirm title="Thu hồi tin nhắn?" onConfirm={() => handleRecallMessage(id)} okText="Thu hồi" cancelText="Hủy">
+                                    <span className="chat-recall-link">Thu hồi</span>
+                                </Popconfirm>
                             </span>
-                        ))}
-                    </div>
+                        )}
+                        {(reactionGroups && Object.keys(reactionGroups).length > 0) && (
+                            <div className="chat-reactions-wrap" style={{ marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                                {Object.entries(reactionGroups).map(([emoji, count]) => (
+                                    <span key={emoji} className="chat-reaction-chip" onClick={() => handleReaction(id, emoji)} title="Bấm để bỏ reaction">
+                                        {emoji} {count > 1 ? count : ''}
+                                    </span>
+                                ))}
+                            </div>
+                        )}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                            {REACTION_EMOJIS.map(emoji => (
+                                <span key={emoji} className="chat-reaction-btn" onClick={() => handleReaction(id, emoji)}>{emoji}</span>
+                            ))}
+                        </div>
+                    </>
                 )}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                    {REACTION_EMOJIS.map(emoji => (
-                        <span key={emoji} className="chat-reaction-btn" onClick={() => handleReaction(id, emoji)}>{emoji}</span>
-                    ))}
-                </div>
                 {isLastInSequence && time && (
                     <div className="chat-bubble-meta">
                         {time}

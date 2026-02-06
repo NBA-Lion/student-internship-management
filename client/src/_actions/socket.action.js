@@ -195,13 +195,24 @@ function useSocketAction() {
                 };
                 setRecoil(curListMessagesAtom, newMessages);
             } else {
-                // Không trùng, thêm mới bình thường
-                newMessages = [...currentMessages, message];
-                setRecoil(curListMessagesAtom, newMessages);
-                
+                // Fallback: có thể Recoil chưa kịp cập nhật optimistic — tìm tin cùng nội dung/sender/receiver để thay thế thay vì thêm mới
+                const fallbackIndex = currentMessages.findIndex(m =>
+                    m._isOptimistic &&
+                    (m.message || m.content) === messageContent &&
+                    (m.sender === senderId || m.from?.vnu_id === senderId) &&
+                    (m.receiver === receiverId || m.to?.vnu_id === receiverId)
+                );
+                if (fallbackIndex >= 0) {
+                    newMessages = currentMessages.map((m, i) => i === fallbackIndex ? { ...message, _isOptimistic: false } : m);
+                    setRecoil(curListMessagesAtom, newMessages);
+                } else {
+                    newMessages = [...currentMessages, message];
+                    setRecoil(curListMessagesAtom, newMessages);
+                }
                 console.log(">>> [Socket] Added message to active conversation:", {
                     totalMessages: newMessages.length,
-                    messageId: message._id
+                    messageId: message._id,
+                    replaced: fallbackIndex >= 0
                 });
             }
         }

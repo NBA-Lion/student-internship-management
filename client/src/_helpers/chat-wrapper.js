@@ -73,10 +73,17 @@ function useChatWrapper() {
                     const r = m.to?.vnu_id || m.receiver;
                     return (s === student_code || r === student_code);
                 };
+                // Tránh giữ optimistic nếu đã có tin trùng từ server (cùng sender, receiver, nội dung)
+                const serverContentKey = (m) => `${m.sender}|${m.receiver}|${(m.message || m.content || '').trim()}`;
+                const serverContentKeys = new Set(serverList.map(serverContentKey));
                 setCurChatPerson(student_code);
                 setCurListMessage((prev) => {
                     const current = prev || [];
-                    const keep = current.filter((m) => inConv(m) && !serverIds.has(m._id));
+                    const keep = current.filter((m) => {
+                        if (!inConv(m) || serverIds.has(m._id)) return false;
+                        if (m._isOptimistic && serverContentKeys.has(`${m.sender}|${m.receiver}|${(m.message || m.content || '').trim()}`)) return false;
+                        return true;
+                    });
                     const merged = [...serverList, ...keep].sort(
                         (a, b) => new Date(a.createdAt || a.createdDate || 0) - new Date(b.createdAt || b.createdDate || 0)
                     );
