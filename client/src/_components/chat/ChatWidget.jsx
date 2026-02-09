@@ -493,13 +493,19 @@ export default function ChatWidget() {
             const currentSelectedId = selectedUserRef.current?.vnu_id || selectedUserRef.current?.student_code;
 
             // ============================================
-            // CHẶN DOUBLE: Tin từ chính mình — KHÔNG add, chỉ replace optimistic (nếu có)
+            // Tin của chính mình (echo từ server): CHỈ add 1 lần từ server — không dùng optimistic nữa
             // ============================================
             if (isMyMessage) {
-                dispatch({
-                    type: 'REPLACE_OPTIMISTIC_WITH_SERVER',
-                    payload: { serverMessage: msg, partnerId: currentSelectedId, myId: myStudentCode }
-                });
+                const forCurrentChat = (msg.to?.vnu_id || msg.receiver) === currentSelectedId || (msg.from?.vnu_id || msg.sender) === myStudentCode;
+                if (forCurrentChat) {
+                    dispatch({
+                        type: 'ADD_MESSAGE',
+                        payload: { message: { ...msg, selfSend: true, isSender: true }, partnerId: currentSelectedId, myId: myStudentCode }
+                    });
+                    setTimeout(() => {
+                        if (messagesEndRef.current) messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+                    }, 50);
+                }
                 return;
             }
 
@@ -691,23 +697,9 @@ export default function ChatWidget() {
         const socketReady = socketWrapper.socket && socketWrapper.socket.connected;
 
         const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        const optimisticMessage = {
-            _id: tempId,
-            message: trimmedMessage,
-            type: 'text',
-            sender: myStudentCode,
-            receiver: userId,
-            from: { vnu_id: myStudentCode, id: myStudentCode, name: currentUser.full_name || 'Tôi' },
-            to: { vnu_id: userId, id: userId, name: selectedUser.name || userId },
-            createdAt: new Date().toISOString(),
-            createdDate: new Date().toISOString(),
-            selfSend: true,
-            isSender: true,
-            _isOptimistic: true,
-        };
 
+        // Socket: KHÔNG dùng optimistic — chỉ thêm tin khi nhận echo từ server → tránh double dứt điểm
         if (socketReady) {
-            dispatch({ type: 'ADD_MESSAGE', payload: { message: optimisticMessage, partnerId: userId, myId: myStudentCode } });
             setMessageText('');
             setShowEmojiPicker(false);
             socketWrapper.socket.emit('StopTyping', { to: userId });
