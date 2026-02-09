@@ -3,6 +3,7 @@ const http = require("http");
 const { Server } = require("socket.io");
 const cors = require("cors");
 const path = require("path");
+const fs = require("fs");
 
 const connectDB = require("./config/db");
 const User = require("./models/User");
@@ -57,6 +58,25 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+// Route rõ ràng cho file chat (PDF/ảnh): trả file hoặc 404 thân thiện (phải đặt trước static)
+app.get("/uploads/chat/:filename", (req, res) => {
+  const raw = req.params.filename || "";
+  const filename = path.basename(raw);
+  if (!filename || filename.includes("..")) {
+    return res.status(400).json({ status: "Error", message: "Tên file không hợp lệ" });
+  }
+  const filePath = path.join(__dirname, "uploads", "chat", filename);
+  if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+    return res.status(404).json({
+      status: "Error",
+      message: "File không tìm thấy. Trên hosting miễn phí (Render/Vercel), file tải lên có thể bị xóa khi server khởi động lại."
+    });
+  }
+  res.sendFile(filePath, { headers: { "Content-Disposition": "inline; filename=\"" + filename + "\"" } }, (err) => {
+    if (err) res.status(500).json({ status: "Error", message: "Lỗi gửi file" });
+  });
+});
+
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // API routes

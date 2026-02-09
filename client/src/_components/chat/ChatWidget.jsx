@@ -72,55 +72,54 @@ function chatReducer(state, action) {
             // SMART DEDUPLICATION for Optimistic UI
             // ============================================
             if (isFromPartner || isToPartner) {
-                // Check for exact ID match (so sánh string tránh ObjectId vs string)
+                const contentStr = (message.message || message.content || '').toString().trim();
                 const existsById = newMessages.some(m => String(m._id) === String(message._id));
-                
-                // Check for optimistic message that server is confirming
-                const optimisticIndex = isMyMessage ? newMessages.findIndex(m => 
-                    m._isOptimistic && 
-                    (m.message || m.content) === (message.message || message.content) && 
-                    (String(m.receiver) === String(message.receiver) || String(m.to?.vnu_id) === String(message.receiver))
-                ) : -1;
+                const isOptimisticPayload = !!message._isOptimistic;
 
-                // Tin của mình: tránh thêm bản sao (server echo trùng nội dung)
-                const contentDupIndex = isMyMessage && optimisticIndex < 0 ? newMessages.findIndex(m => {
-                    const fromMe = (m.from?.vnu_id || m.sender) === myId;
-                    const sameContent = (m.message || m.content) === (message.message || message.content);
-                    const sameReceiver = String(m.receiver) === String(message.receiver) || String(m.to?.vnu_id) === String(message.receiver);
-                    return fromMe && sameContent && sameReceiver;
-                }) : -1;
+                // Nếu đang thêm optimistic nhưng đã có tin từ mình cùng nội dung (server echo tới trước) → bỏ qua, tránh double
+                const alreadyHaveSameFromMe = isOptimisticPayload && contentStr && newMessages.some(m => 
+                    (m.from?.vnu_id || m.sender) === myId && 
+                    (m.message || m.content || '').toString().trim() === contentStr && 
+                    !m._isOptimistic
+                );
 
-                if (existsById) {
-                    // Đã có đúng tin này (theo _id), chỉ cập nhật conversation list bên dưới
-                    console.log('>>> [Reducer] Skipping duplicate message:', message._id);
-                } else if (optimisticIndex >= 0) {
-                    console.log('>>> [Reducer] Replacing optimistic message with confirmed:', message._id);
-                    newMessages[optimisticIndex] = { ...message, _isOptimistic: false };
-                } else if (contentDupIndex >= 0) {
-                    // Tin của mình trùng nội dung → thay bản cũ bằng bản server (tránh 2 bong bóng)
-                    console.log('>>> [Reducer] Replacing content-duplicate my message:', message._id);
-                    newMessages[contentDupIndex] = { ...message, _isOptimistic: false };
-                } else if (isMyMessage) {
-                    // Fallback: tin của mình nhưng không khớp optimistic/receiver — thay tin cuối cùng cùng nội dung (tránh sender thấy 2 tin)
-                    const contentStr = (message.message || message.content || '').toString();
-                    let lastSameIndex = -1;
-                    for (let i = newMessages.length - 1; i >= 0; i--) {
-                        const m = newMessages[i];
+                if (!alreadyHaveSameFromMe) {
+                    const optimisticIndex = isMyMessage ? newMessages.findIndex(m => 
+                        m._isOptimistic && (m.message || m.content || '').toString().trim() === contentStr
+                    ) : -1;
+                    const contentDupIndex = isMyMessage && optimisticIndex < 0 ? newMessages.findIndex(m => {
                         const fromMe = (m.from?.vnu_id || m.sender) === myId;
-                        const sameContent = (m.message || m.content || '').toString() === contentStr;
-                        if (fromMe && sameContent) {
-                            lastSameIndex = i;
-                            break;
+                        return fromMe && (m.message || m.content || '').toString().trim() === contentStr;
+                    }) : -1;
+                    let lastMySameIndex = -1;
+                    if (isMyMessage && optimisticIndex < 0 && contentDupIndex < 0) {
+                        for (let i = newMessages.length - 1; i >= 0; i--) {
+                            const m = newMessages[i];
+                            if ((m.from?.vnu_id || m.sender) === myId && (m.message || m.content || '').toString().trim() === contentStr) {
+                                lastMySameIndex = i;
+                                break;
+                            }
                         }
                     }
-                    if (lastSameIndex >= 0) {
-                        newMessages[lastSameIndex] = { ...message, _isOptimistic: false };
+
+                    if (existsById) {
+                        // skip add
+                    } else if (optimisticIndex >= 0) {
+                        newMessages[optimisticIndex] = { ...message, _isOptimistic: false };
+                    } else if (contentDupIndex >= 0) {
+                        newMessages[contentDupIndex] = { ...message, _isOptimistic: false };
+                    } else if (lastMySameIndex >= 0) {
+                        newMessages[lastMySameIndex] = { ...message, _isOptimistic: false };
+                    } else if (isMyMessage) {
+                        const lastFromMeIndex = newMessages.map((m, i) => ((m.from?.vnu_id || m.sender) === myId ? i : -1)).filter(i => i >= 0).pop();
+                        if (lastFromMeIndex !== undefined && lastFromMeIndex >= 0) {
+                            newMessages[lastFromMeIndex] = { ...message, _isOptimistic: false };
+                        } else {
+                            newMessages = [...newMessages, message];
+                        }
                     } else {
                         newMessages = [...newMessages, message];
                     }
-                } else {
-                    console.log('>>> [Reducer] Adding new message:', message._id);
-                    newMessages = [...newMessages, message];
                 }
             }
             
