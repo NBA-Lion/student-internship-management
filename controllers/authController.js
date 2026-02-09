@@ -1,10 +1,26 @@
 /**
- * Auth controller: forgot password + reset password.
+ * Auth controller: forgot password, reset password, TOTP 2FA.
  */
 const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
+const TOTP = require("totp.js");
+const QRCode = require("qrcode");
 const User = require("../models/User");
+
+/** Verify TOTP với time window ±1 (cho phép lệch ~30s) để tránh reject do lệch giờ máy/điện thoại. */
+function verifyTOTPWithWindow(secret, codeStr, timeStep = 30) {
+  const Hotp = TOTP.HOTP;
+  const T = Math.floor(Date.now() / 1000 / timeStep);
+  const hotp = new Hotp(secret);
+  for (let d = -1; d <= 1; d++) {
+    if (hotp.genOTP(T + d) === codeStr) return true;
+  }
+  return false;
+}
 const { sendMail } = require("../services/emailService");
+const { generateToken, generateTempToken, verifyToken } = require("../middleware/auth");
+
+const APP_NAME = process.env.APP_NAME || "QL Thuc Tap";
 
 const RESET_TOKEN_EXPIRE_MINUTES = 15;
 // FRONTEND_BASE_URL hoặc FRONTEND_URL (Render) — cần cho link reset password
@@ -111,4 +127,159 @@ async function resetPassword(req, res) {
   }
 }
 
-module.exports = { forgotPassword, resetPassword };
+// ========== TOTP 2FA ==========
+
+/**
+ * GET /auth/2fa/status — Trả về trạng thái bật/tắt 2FA của user đang đăng nhập.
+ */
+async function twofaStatus(req, res) {
+  try {
+    const user = await User.findById(req.user.id).select("totpEnabled");
+    return res.json({ status: "Success", totpEnabled: !!user?.totpEnabled });
+  } catch (error) {
+    return res.status(500).json({ status: "Error", message: "Lỗi server" });
+  }
+}
+
+/**
+ * POST /auth/2fa/setup — Đã đăng nhập, bật 2FA: tạo secret + QR bằng totp.js, chưa bật cho đến khi verify-setup.
+ * Dùng totp.js (https://github.com/wuyanxin/totp.js) tương thích Google Authenticator.
+ */
+async function twofaSetup(req, res) {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(401).json({ status: "Error", message: "Không tìm thấy user" });
+    if (user.totpEnabled) {
+      return res.status(400).json({ status: "Error", message: "Tài khoản đã bật xác thực 2 bước" });
+    }
+
+    const secret = TOTP.randomKey();
+    const totp = new TOTP(secret);
+    const label = String(user.email || user.student_code || user._id).replace(/:/g, "");
+    const otpauthUrl = `otpauth://totp/${encodeURIComponent(APP_NAME + ":" + label)}?secret=${secret}&issuer=${encodeURIComponent(APP_NAME)}`;
+
+    let qrDataUrl = null;
+    try {
+      qrDataUrl = await QRCode.toDataURL(otpauthUrl, { width: 200, margin: 1 });
+    } catch (qrErr) {
+      console.warn(">>> [AuthController] QRCode.toDataURL failed:", qrErr?.message);
+    }
+
+    await User.updateOne(
+      { _id: user._id },
+      { $set: { totpSecret: secret } }
+    );
+
+    return res.json({
+      status: "Success",
+      secret,
+      otpauthUrl,
+      qrDataUrl,
+      message: "Quét mã QR bằng Google Authenticator (hoặc app tương tự), sau đó nhập mã 6 số để xác nhận.",
+    });
+  } catch (error) {
+    console.error(">>> [AuthController] 2fa setup error:", error);
+    return res.status(500).json({ status: "Error", message: "Lỗi server", error: error.message });
+  }
+}
+
+/**
+ * POST /auth/2fa/verify-setup — Xác nhận mã TOTP lần đầu → bật 2FA.
+ */
+async function twofaVerifySetup(req, res) {
+  try {
+    const { code } = req.body;
+    if (!code || String(code).trim().length < 6) {
+      return res.status(400).json({ status: "Error", message: "Nhập mã 6 số từ ứng dụng" });
+    }
+    const user = await User.findById(req.user.id);
+    if (!user || !user.totpSecret) {
+      return res.status(400).json({ status: "Error", message: "Chưa tạo mã 2FA. Thử bật lại từ đầu." });
+    }
+
+    const codeStr = String(code).trim().replace(/\s/g, "");
+    if (!verifyTOTPWithWindow(user.totpSecret, codeStr)) {
+      return res.status(400).json({ status: "Error", message: "Mã không đúng hoặc đã hết hạn. Thử mã mới." });
+    }
+
+    await User.updateOne({ _id: user._id }, { $set: { totpEnabled: true } });
+    return res.json({ status: "Success", message: "Đã bật xác thực 2 bước." });
+  } catch (error) {
+    console.error(">>> [AuthController] 2fa verify-setup error:", error);
+    return res.status(500).json({ status: "Error", message: "Lỗi server", error: error.message });
+  }
+}
+
+/**
+ * POST /auth/2fa/verify-login — Sau khi login trả requires2FA + tempToken, client gửi tempToken + code → trả user + token.
+ */
+async function twofaVerifyLogin(req, res) {
+  try {
+    const { tempToken, code } = req.body;
+    if (!tempToken || !code) {
+      return res.status(400).json({ status: "Error", message: "Thiếu mã xác thực hoặc phiên đăng nhập." });
+    }
+    const decoded = verifyToken(tempToken);
+    if (!decoded || decoded.purpose !== "2fa") {
+      return res.status(401).json({ status: "Error", message: "Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại." });
+    }
+    const user = await User.findById(decoded.userId);
+    if (!user || !user.totpEnabled || !user.totpSecret) {
+      return res.status(401).json({ status: "Error", message: "Tài khoản chưa bật 2FA hoặc phiên không hợp lệ." });
+    }
+
+    const codeStr = String(code).trim().replace(/\s/g, "");
+    if (!verifyTOTPWithWindow(user.totpSecret, codeStr)) {
+      return res.status(401).json({ status: "Error", message: "Mã xác thực không đúng hoặc đã hết hạn." });
+    }
+
+    const token = generateToken(user);
+    const userResponse = user.toObject();
+    delete userResponse.password;
+    delete userResponse.totpSecret;
+    return res.json({ status: "Success", user: userResponse, token });
+  } catch (error) {
+    console.error(">>> [AuthController] 2fa verify-login error:", error);
+    return res.status(500).json({ status: "Error", message: "Lỗi server", error: error.message });
+  }
+}
+
+/**
+ * POST /auth/2fa/disable — Tắt 2FA (cần nhập mã hiện tại để xác nhận).
+ */
+async function twofaDisable(req, res) {
+  try {
+    const { code } = req.body;
+    if (!code || String(code).trim().length < 6) {
+      return res.status(400).json({ status: "Error", message: "Nhập mã 6 số hiện tại để tắt 2FA" });
+    }
+    const user = await User.findById(req.user.id);
+    if (!user || !user.totpEnabled || !user.totpSecret) {
+      return res.json({ status: "Success", message: "Tài khoản chưa bật 2FA." });
+    }
+
+    const codeStr = String(code).trim().replace(/\s/g, "");
+    if (!verifyTOTPWithWindow(user.totpSecret, codeStr)) {
+      return res.status(400).json({ status: "Error", message: "Mã không đúng. Không thể tắt 2FA." });
+    }
+
+    await User.updateOne(
+      { _id: user._id },
+      { $unset: { totpSecret: 1, totpEnabled: 1 } }
+    );
+    return res.json({ status: "Success", message: "Đã tắt xác thực 2 bước." });
+  } catch (error) {
+    console.error(">>> [AuthController] 2fa disable error:", error);
+    return res.status(500).json({ status: "Error", message: "Lỗi server", error: error.message });
+  }
+}
+
+module.exports = {
+  forgotPassword,
+  resetPassword,
+  twofaStatus,
+  twofaSetup,
+  twofaVerifySetup,
+  twofaVerifyLogin,
+  twofaDisable,
+};

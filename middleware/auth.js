@@ -18,6 +18,15 @@ function generateToken(user) {
   );
 }
 
+// Temp token chỉ dùng để đổi lấy JWT sau khi nhập mã TOTP (expire 5 phút)
+function generateTempToken(userId) {
+  return jwt.sign(
+    { userId: String(userId), purpose: "2fa" },
+    JWT_SECRET,
+    { expiresIn: "5m" }
+  );
+}
+
 // Verify JWT Token
 function verifyToken(token) {
   try {
@@ -107,6 +116,7 @@ function socketAuthMiddleware(socket, next) {
 
 module.exports = {
   generateToken,
+  generateTempToken,
   verifyToken,
   authMiddleware,
   socketAuthMiddleware,

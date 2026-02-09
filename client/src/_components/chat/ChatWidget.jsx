@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef, useReducer } from 'react';
-import { Badge, Button, Drawer, Input, List, Avatar, Spin, Empty, Popconfirm, Modal, Upload, Tooltip, message, Dropdown, Menu } from 'antd';
+import { Badge, Button, Drawer, Input, List, Avatar, Spin, Empty, Modal, Upload, Tooltip, message, Dropdown, Menu, Popconfirm } from 'antd';
 import { 
     MessageOutlined, SendOutlined, SearchOutlined, UserOutlined, ArrowLeftOutlined,
     DeleteOutlined, PictureOutlined, SmileOutlined, CheckOutlined, LoadingOutlined,
     MoreOutlined, PushpinOutlined, InboxOutlined, BellOutlined, StopOutlined,
-    EyeInvisibleOutlined, PaperClipOutlined, FilePdfOutlined
+    EyeInvisibleOutlined, PaperClipOutlined, FilePdfOutlined, EditOutlined
 } from '@ant-design/icons';
 import { useRecoilValue, useRecoilState } from 'recoil';
 import { authAtom } from '_state';
@@ -20,11 +20,26 @@ import './Chat.css';
 // CONSTANTS
 // ============================================
 const CHAT_MUTED_KEY = 'chat_muted_partners';
+const CHAT_HIDDEN_IDS_KEY_PREFIX = 'chat_hidden_ids_'; // Xóa với tôi: key theo từng user để bên kia không bị ảnh hưởng
 function getMutedPartners() {
   try {
     const raw = localStorage.getItem(CHAT_MUTED_KEY);
     return raw ? JSON.parse(raw) : {};
   } catch (_) { return {}; }
+}
+function getHiddenMessageIds(userId) {
+  if (!userId) return new Set();
+  try {
+    const raw = localStorage.getItem(CHAT_HIDDEN_IDS_KEY_PREFIX + userId);
+    return raw ? new Set(JSON.parse(raw)) : new Set();
+  } catch (_) { return new Set(); }
+}
+function addHiddenMessageId(id, userId) {
+  if (!userId) return new Set();
+  const next = new Set(getHiddenMessageIds(userId));
+  next.add(String(id));
+  localStorage.setItem(CHAT_HIDDEN_IDS_KEY_PREFIX + userId, JSON.stringify([...next]));
+  return next;
 }
 function setMutedPartner(partnerId, muted) {
   const o = getMutedPartners();
@@ -306,17 +321,25 @@ function chatReducer(state, action) {
 
         case 'RECALL_MESSAGE': {
             const { messageId } = action.payload;
-            const newMessages = state.currentMessages.map(m =>
-                String(m._id) === String(messageId) ? { ...m, message: "Tin nhắn đã được thu hồi", type: "recalled", attachment_url: null } : m
-            );
+            const idStr = normMessageId(messageId);
+            if (!idStr || idStr === '[object Object]') return state;
+            const recalledPayload = { message: "Tin nhắn đã được thu hồi", type: "recalled", deleted: true, attachment_url: null, reactions: [] };
+            const newMessages = state.currentMessages.map(m => {
+                const mid = normMessageId(m._id);
+                if (mid && mid === idStr) return { ...m, ...recalledPayload };
+                return m;
+            });
             return { ...state, currentMessages: newMessages };
         }
 
         case 'EDIT_MESSAGE': {
             const { messageId, message: newText, editedAt } = action.payload;
-            const newMessages = state.currentMessages.map(m =>
-                String(m._id) === String(messageId) ? { ...m, message: newText, editedAt } : m
-            );
+            const idStr = normMessageId(messageId);
+            if (!idStr || !newText) return state;
+            const newMessages = state.currentMessages.map(m => {
+                if (normMessageId(m._id) === idStr) return { ...m, message: String(newText).trim(), editedAt: editedAt || new Date() };
+                return m;
+            });
             return { ...state, currentMessages: newMessages };
         }
 
@@ -354,8 +377,6 @@ export default function ChatWidget() {
     const [uploading, setUploading] = useState(false);
     const [previewImage, setPreviewImage] = useState(null);
     const [typingUsers, setTypingUsers] = useState(new Set());
-    const [editingMessageId, setEditingMessageId] = useState(null);
-    const [editingText, setEditingText] = useState('');
     const [searchInChat, setSearchInChat] = useState('');
     const [mutedPartners, setMutedPartners] = useState(getMutedPartners);
     const [lastTypingTime, setLastTypingTime] = useState(0);
@@ -363,9 +384,13 @@ export default function ChatWidget() {
     // Menu state
     const [activeMenuId, setActiveMenuId] = useState(null);
     const [deleteConfirmId, setDeleteConfirmId] = useState(null);
-    // Chỉ hiện Sửa / Thu hồi / reaction khi bấm vào tin nhắn
-    const [selectedMessageId, setSelectedMessageId] = useState(null);
-    
+    const [recallLoadingId, setRecallLoadingId] = useState(null);
+    const [messageOptionsId, setMessageOptionsId] = useState(null); // id tin nhắn đang mở menu (click vào tin → hiện Thu hồi, ...)
+    const [editingMessageId, setEditingMessageId] = useState(null);
+    const [editingText, setEditingText] = useState('');
+    const [editLoadingId, setEditLoadingId] = useState(null);
+    const [hiddenMessageIds, setHiddenMessageIds] = useState(() => new Set());
+
     // Complex state with reducer
     const [state, dispatch] = useReducer(chatReducer, initialState);
     
@@ -382,12 +407,17 @@ export default function ChatWidget() {
     useEffect(() => { drawerOpenRef.current = drawerOpen; }, [drawerOpen]);
     useEffect(() => { selectedUserRef.current = selectedUser; }, [selectedUser]);
     useEffect(() => { stateRef.current = state; }, [state]);
-    
-    const chatWrapper = useChatWrapper();
 
     // Current user info
     const currentUser = getUserData();
     const myStudentCode = currentUser.student_code || currentUser.vnu_id || '';
+
+    // Danh sách "xóa với tôi" theo từng user — đổi tài khoản là đọc lại list của user đó
+    useEffect(() => {
+        setHiddenMessageIds(getHiddenMessageIds(myStudentCode));
+    }, [myStudentCode]);
+
+    const chatWrapper = useChatWrapper();
 
     // ============================================
     // CLICK OUTSIDE TO CLOSE MENU
@@ -397,13 +427,14 @@ export default function ChatWidget() {
             if (activeMenuId && menuRef.current && !menuRef.current.contains(event.target)) {
                 setActiveMenuId(null);
             }
-            if (selectedMessageId && !event.target.closest('.chat-bubble-row')) {
-                setSelectedMessageId(null);
+            // Đóng menu options của tin nhắn khi click ra ngoài (Dropdown tự gọi onVisibleChange, nhưng backup)
+            if (messageOptionsId && !event.target.closest?.('.ant-dropdown')) {
+                setMessageOptionsId(null);
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, [activeMenuId, selectedMessageId]);
+    }, [activeMenuId, messageOptionsId]);
 
     // ============================================
     // NOTIFICATION SOUND
@@ -590,15 +621,13 @@ export default function ChatWidget() {
         };
         const handleMessageDeletedSocket = (deletedId) => {
             if (deletedId) dispatch({ type: 'RECALL_MESSAGE', payload: { messageId: String(deletedId) } });
-            setRecallLoadingId(null);
         };
         const handleMessageDeletedError = (err) => {
             message.error(err?.message || 'Không thể thu hồi tin nhắn');
-            setRecallLoadingId(null);
         };
 
         const handleMessageUpdated = (data) => {
-            if (data._id && data.message != null) dispatch({ type: 'EDIT_MESSAGE', payload: { messageId: data._id, message: data.message, editedAt: data.editedAt } });
+            if (data._id != null && data.message != null) dispatch({ type: 'EDIT_MESSAGE', payload: { messageId: normMessageId(data._id), message: data.message, editedAt: data.editedAt } });
         };
 
         const handleMessageReaction = (data) => {
@@ -899,91 +928,6 @@ export default function ChatWidget() {
         return false;
     }, [selectedUser, auth]);
 
-    const [recallLoadingId, setRecallLoadingId] = useState(null);
-    const [editLoading, setEditLoading] = useState(false);
-
-    const handleRecallMessageFallback = useCallback(async (idStr) => {
-        if (!auth) {
-            message.error('Vui lòng đăng nhập lại');
-            return;
-        }
-        setRecallLoadingId(idStr);
-        try {
-            const url = `${API_BASE}/api/chat/message/${encodeURIComponent(idStr)}`;
-            const res = await fetch(url, { method: 'DELETE', headers: { 'Authorization': `Bearer ${auth}` } });
-            const data = await res.json().catch(() => ({}));
-            if (res.ok && data.status === 'Success') {
-                dispatch({ type: 'RECALL_MESSAGE', payload: { messageId: idStr } });
-                setSelectedMessageId(null);
-            } else {
-                message.error(data.message || (res.status === 403 ? 'Chỉ người gửi mới thu hồi được' : res.status === 404 ? 'Không tìm thấy tin nhắn' : 'Không thể thu hồi'));
-            }
-        } catch (err) {
-            message.error('Lỗi kết nối. Kiểm tra mạng hoặc backend đang chạy.');
-        } finally {
-            setRecallLoadingId(null);
-        }
-    }, [auth]);
-
-    // Thu hồi: luôn gọi API (REST) để chắc chắn — server sẽ emit MessageDeleted cho cả hai bên
-    const handleRecallMessage = useCallback((messageId) => {
-        const idStr = normMessageId(messageId);
-        if (!idStr || idStr.startsWith('temp_') || idStr === '[object Object]') {
-            message.warning('Vui lòng đợi tin nhắn được gửi xong');
-            return;
-        }
-        setSelectedMessageId(null);
-        handleRecallMessageFallback(idStr);
-    }, [handleRecallMessageFallback]);
-
-    const handleEditMessage = useCallback(async (messageId, newText) => {
-        const idStr = String(messageId);
-        if (idStr.startsWith('temp_')) {
-            message.warning('Vui lòng đợi tin nhắn được gửi xong');
-            return;
-        }
-        setEditLoading(true);
-        try {
-            const res = await fetch(`${API_BASE}/api/chat/message/${idStr}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${auth}` },
-                body: JSON.stringify({ message: newText })
-            });
-            const data = await res.json();
-            if (data.status === 'Success' && data.data) {
-                dispatch({ type: 'EDIT_MESSAGE', payload: { messageId: idStr, message: data.data.message, editedAt: data.data.editedAt } });
-                setEditingMessageId(null);
-                setEditingText('');
-                setSelectedMessageId(null);
-            } else {
-                message.error(data.message || 'Không thể sửa');
-            }
-        } catch (err) {
-            message.error('Lỗi kết nối');
-        } finally {
-            setEditLoading(false);
-        }
-    }, [auth]);
-
-    const openEditModal = (id, text) => { setEditingMessageId(id); setEditingText(text || ''); };
-
-    const REACTION_EMOJIS = ['👍', '❤️', '😢', '🔥', '👏'];
-    const handleReaction = useCallback(async (messageId, emoji) => {
-        if (String(messageId).startsWith('temp_')) {
-            message.warning('Vui lòng đợi tin nhắn được gửi xong');
-            return;
-        }
-        try {
-            const res = await fetch(`${API_BASE}/api/chat/message/${messageId}/reaction`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${auth}` },
-                body: JSON.stringify({ emoji })
-            });
-            const data = await res.json();
-            if (data.status === 'Success' && data.data) dispatch({ type: 'UPDATE_MESSAGE_REACTIONS', payload: { messageId: data.data.messageId, reactions: data.data.reactions } });
-        } catch (_) {}
-    }, [auth]);
-
     // ============================================
     // FORMAT MESSAGES
     // ============================================
@@ -996,11 +940,13 @@ export default function ChatWidget() {
                 ? new Date(timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
                 : '';
             
+            const deleted = !!msg.deleted;
             return {
                 id: normMessageId(msg._id),
-                text: msg.message,
-                type: msg.type || 'text',
-                attachment_url: msg.attachment_url,
+                text: deleted ? 'Tin nhắn đã được thu hồi' : msg.message,
+                type: deleted ? 'recalled' : (msg.type || 'text'),
+                attachment_url: deleted ? null : msg.attachment_url,
+                deleted,
                 isMine,
                 senderId,
                 senderName: msg.from?.name || senderId,
@@ -1008,15 +954,16 @@ export default function ChatWidget() {
                 timestamp,
                 is_read: msg.is_read,
                 editedAt: msg.editedAt,
-                reactions: msg.reactions || []
+                reactions: deleted ? [] : (msg.reactions || [])
             };
         });
     }, [state.currentMessages, myStudentCode]);
 
     const formattedMessages = formatMessages();
-    const messagesToShow = searchInChat.trim()
+    const afterSearch = searchInChat.trim()
         ? formattedMessages.filter(m => (m.text || '').toLowerCase().includes(searchInChat.trim().toLowerCase()))
         : formattedMessages;
+    const messagesToShow = afterSearch.filter(m => !hiddenMessageIds.has(String(m.id)));
     const contactList = searchText.trim() 
         ? searchResults.map(u => ({
             partner_id: u.vnu_id,
@@ -1032,11 +979,74 @@ export default function ChatWidget() {
     const isOtherTyping = selectedUser && typingUsers.has(selectedUser.vnu_id || selectedUser.student_code);
 
     // ============================================
+    // THU HỒI TIN NHẮN (REST DELETE + socket đã emit từ server)
+    // ============================================
+    const handleRecallMessage = useCallback(async (messageId) => {
+        if (!auth || !messageId) return;
+        const idStr = String(messageId);
+        setRecallLoadingId(idStr);
+        try {
+            const response = await fetch(`${API_BASE}/api/chat/message/${idStr}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${auth}` }
+            });
+            const data = await response.json().catch(() => ({}));
+            if (response.ok && (data.status === 'Success' || data.status === 'success')) {
+                dispatch({ type: 'RECALL_MESSAGE', payload: { messageId: idStr } });
+            } else {
+                message.error(data.message || 'Không thể thu hồi tin nhắn');
+            }
+        } catch (e) {
+            message.error('Lỗi kết nối. Thử lại.');
+        } finally {
+            setRecallLoadingId(null);
+        }
+    }, [auth]);
+
+    // ============================================
+    // SỬA TIN NHẮN (PUT + socket MessageUpdated từ server)
+    // ============================================
+    const handleEditMessage = useCallback(async (messageId, newContent) => {
+        if (!auth || !messageId || !String(newContent).trim()) return;
+        const idStr = String(messageId);
+        setEditLoadingId(idStr);
+        try {
+            const response = await fetch(`${API_BASE}/api/chat/message/${idStr}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${auth}` },
+                body: JSON.stringify({ message: String(newContent).trim() })
+            });
+            const data = await response.json().catch(() => ({}));
+            if (response.ok && (data.status === 'Success' || data.status === 'success')) {
+                dispatch({ type: 'EDIT_MESSAGE', payload: { messageId: idStr, message: data.data?.message || newContent, editedAt: data.data?.editedAt } });
+                setEditingMessageId(null);
+                setEditingText('');
+            } else {
+                message.error(data.message || 'Không thể sửa tin nhắn');
+            }
+        } catch (e) {
+            message.error('Lỗi kết nối. Thử lại.');
+        } finally {
+            setEditLoadingId(null);
+        }
+    }, [auth]);
+
+    // ============================================
+    // XÓA VỚI TÔI (chỉ ẩn ở phía mình, bên kia vẫn thấy)
+    // ============================================
+    const handleHideMessageForMe = useCallback((messageId) => {
+        if (!myStudentCode) return;
+        setHiddenMessageIds(addHiddenMessageId(messageId, myStudentCode));
+        setMessageOptionsId(null);
+    }, [myStudentCode]);
+
+    // ============================================
     // RENDER MESSAGE BUBBLE
     // ============================================
     const renderMessageBubble = (msg, idx, messages) => {
-        const { isMine, text, time, id, type, attachment_url, editedAt, reactions = [] } = msg;
-        const reactionGroups = reactions.reduce((acc, r) => { acc[r.emoji] = (acc[r.emoji] || 0) + 1; return acc; }, {});
+        const { isMine, text, time, id, type, attachment_url, editedAt, deleted } = msg;
+        const isRecalled = deleted === true || type === 'recalled';
+        const displayText = isRecalled ? (text && text.trim()) || 'Tin nhắn đã được thu hồi' : (text || '');
         const prevMsg = messages[idx - 1];
         const nextMsg = messages[idx + 1];
         const isFirstInSequence = !prevMsg || prevMsg.isMine !== isMine;
@@ -1058,57 +1068,62 @@ export default function ChatWidget() {
         };
 
         const fileUrl = attachment_url ? `${API_BASE}${attachment_url}` : null;
-        const isSelected = selectedMessageId === (id || msg._id);
-        const toggleSelect = (e) => {
-            if (e.target.closest('.chat-recall-link, .chat-reaction-chip, .chat-reaction-btn, .ant-popover')) return;
-            setSelectedMessageId(prev => (prev === (id || msg._id) ? null : (id || msg._id)));
-        };
-        return (
-            <div key={id || idx} className="chat-bubble-row" style={{ display: 'flex', flexDirection: 'column', alignItems: isMine ? 'flex-end' : 'flex-start', marginBottom: isLastInSequence ? 10 : 3 }}>
-                {type === 'image' && fileUrl ? (
+        const msgId = id || '';
+        const showMessageOptions = !isRecalled; // Tin của mình: Sửa + Thu hồi; tin người khác: Xóa với tôi
+        const isOptionsOpen = messageOptionsId === msgId;
+        const isTextEditable = type !== 'image' && type !== 'file';
+        const isEditing = editingMessageId === msgId;
+        const isEditLoading = editLoadingId === msgId;
+
+        const bubbleContent = (
+            <>
+                {isEditing && isTextEditable ? (
+                    <div className="chat-bubble chat-bubble-mine chat-edit-inline" style={{ maxWidth: '85%', padding: '10px 12px', borderRadius: 18 }}>
+                        <Input.TextArea
+                            autoSize={{ minRows: 1, maxRows: 4 }}
+                            value={editingText}
+                            onChange={(e) => setEditingText(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleEditMessage(msgId, editingText); } }}
+                            disabled={isEditLoading}
+                            autoFocus
+                            style={{ marginBottom: 8, fontSize: 14 }}
+                        />
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
+                            <Button size="small" onClick={() => { setEditingMessageId(null); setEditingText(''); }}>Hủy</Button>
+                            <Button size="small" type="primary" loading={isEditLoading} onClick={() => handleEditMessage(msgId, editingText)}>Lưu</Button>
+                        </div>
+                    </div>
+                ) : type === 'image' && fileUrl ? (
                     <div className="chat-bubble chat-bubble-image" style={{ maxWidth: '75%', ...getBorderRadius(), overflow: 'hidden', cursor: 'pointer' }}
-                         onClick={(e) => { e.stopPropagation(); if (isSelected) setPreviewImage(fileUrl); else toggleSelect(e); }}>
+                         onClick={(e) => { e.stopPropagation(); setPreviewImage(fileUrl); }}>
                         <img src={fileUrl} alt="Sent" style={{ maxWidth: '100%', maxHeight: 220, display: 'block', borderRadius: 'inherit' }} />
                     </div>
                 ) : type === 'file' && fileUrl ? (
-                    <a href={fileUrl} target="_blank" rel="noopener noreferrer" className={`chat-bubble ${isMine ? 'chat-bubble-mine' : 'chat-bubble-theirs'}`} style={{ maxWidth: '75%', padding: '12px 16px', ...getBorderRadius(), wordBreak: 'break-word', display: 'inline-flex', alignItems: 'center', gap: 8, textDecoration: 'none', color: 'inherit' }}>
+                    <a href={fileUrl} target="_blank" rel="noopener noreferrer" className={`chat-bubble ${isMine ? 'chat-bubble-mine' : 'chat-bubble-theirs'}`} style={{ maxWidth: '75%', padding: '12px 16px', ...getBorderRadius(), wordBreak: 'break-word', display: 'inline-flex', alignItems: 'center', gap: 8, textDecoration: 'none', color: 'inherit' }}
+                       onClick={(e) => e.stopPropagation()}>
                         <FilePdfOutlined style={{ fontSize: 20 }} />
                         <span className="chat-bubble-text">{text}</span>
                     </a>
                 ) : (
-                    <div className={`chat-bubble ${isMine ? 'chat-bubble-mine' : 'chat-bubble-theirs'} ${type === 'recalled' ? 'chat-bubble-recalled' : ''}`} style={{ maxWidth: '75%', padding: '12px 16px', ...getBorderRadius(), wordBreak: 'break-word', cursor: 'pointer' }} onClick={toggleSelect} title="Bấm để xem Sửa / Thu hồi / Reaction">
-                        <div className="chat-bubble-text">{text}</div>
-                        {editedAt && <div className="chat-edited-label">Đã chỉnh sửa</div>}
-                    </div>
-                )}
-                {isSelected && (
                     <>
-                        {isMine && type !== 'recalled' && (
-                            <span style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 2 }}>
-                                {(type === 'text' || !type) && (
-                                    <span className="chat-recall-link" onClick={(e) => { e.stopPropagation(); openEditModal(id, text); }} role="button" tabIndex={0}>Sửa</span>
-                                )}
-                                <Popconfirm title="Thu hồi tin nhắn?" onConfirm={() => handleRecallMessage(id)} okText="Thu hồi" cancelText="Hủy">
-                                    <span className="chat-recall-link" onClick={(e) => e.stopPropagation()} role="button" tabIndex={0}>
-                                        {recallLoadingId === String(id) ? <LoadingOutlined spin style={{ marginRight: 4 }} /> : null}
-                                        Thu hồi
-                                    </span>
-                                </Popconfirm>
-                            </span>
+                        {editedAt && !isRecalled && isMine && (
+                            <div className="chat-edited-label chat-edited-label--above">Đã chỉnh sửa</div>
                         )}
-                        {(reactionGroups && Object.keys(reactionGroups).length > 0) && (
-                            <div className="chat-reactions-wrap" style={{ marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                                {Object.entries(reactionGroups).map(([emoji, count]) => (
-                                    <span key={emoji} className="chat-reaction-chip" onClick={() => handleReaction(id, emoji)} title="Bấm để bỏ reaction">
-                                        {emoji} {count > 1 ? count : ''}
-                                    </span>
-                                ))}
-                            </div>
-                        )}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                            {REACTION_EMOJIS.map(emoji => (
-                                <span key={emoji} className="chat-reaction-btn" onClick={() => handleReaction(id, emoji)}>{emoji}</span>
-                            ))}
+                        <div
+                            className={`chat-bubble ${isMine ? 'chat-bubble-mine' : 'chat-bubble-theirs'} ${isRecalled ? 'chat-bubble-recalled' : ''}`}
+                            style={{
+                                maxWidth: '75%',
+                                minWidth: 80,
+                                padding: '12px 16px',
+                                ...getBorderRadius(),
+                                wordBreak: 'break-word',
+                                cursor: isRecalled ? 'default' : 'default',
+                            }}
+                            title={isRecalled ? 'Tin đã thu hồi' : (showMessageOptions ? 'Nhấn để xem thêm' : undefined)}
+                            onContextMenu={isRecalled ? (e) => e.preventDefault() : undefined}
+                        >
+                            <div className="chat-bubble-text">{displayText}</div>
+                            {editedAt && !isRecalled && !isMine && <div className="chat-edited-label">Đã chỉnh sửa</div>}
                         </div>
                     </>
                 )}
@@ -1122,8 +1137,100 @@ export default function ChatWidget() {
                         )}
                     </div>
                 )}
+                {showMessageOptions && recallLoadingId === msgId && (
+                    <div style={{ marginTop: 2, fontSize: 12, color: '#8c8c8c' }}><LoadingOutlined spin /> Đang thu hồi...</div>
+                )}
+            </>
+        );
+
+        const messageOptionsOverlay = (
+            <div className="chat-message-options-dropdown chat-message-options-dropdown-enter">
+                {isMine ? (
+                    recallLoadingId === msgId ? (
+                        <div className="chat-option-item chat-option-item--loading"><LoadingOutlined spin /> Đang thu hồi...</div>
+                    ) : (
+                        <>
+                            {isTextEditable && (
+                                <div
+                                    className="chat-option-item"
+                                    onClick={(e) => { e.stopPropagation(); setMessageOptionsId(null); setEditingMessageId(msgId); setEditingText(text || ''); }}
+                                >
+                                    <EditOutlined style={{ marginRight: 6, fontSize: 12 }} /> Sửa
+                                </div>
+                            )}
+                            <Popconfirm
+                                title="Thu hồi tin nhắn?"
+                                description="Tin nhắn sẽ hiển thị là đã thu hồi với mọi người."
+                                onConfirm={() => { handleRecallMessage(id); setMessageOptionsId(null); }}
+                                okText="Thu hồi"
+                                cancelText="Hủy"
+                                okButtonProps={{ danger: true }}
+                            >
+                                <div className="chat-option-item chat-option-item--danger" onClick={(e) => e.stopPropagation()}>
+                                    <DeleteOutlined style={{ marginRight: 6, fontSize: 12 }} /> Thu hồi
+                                </div>
+                            </Popconfirm>
+                        </>
+                    )
+                ) : (
+                    <div
+                        className="chat-option-item"
+                        onClick={(e) => { e.stopPropagation(); handleHideMessageForMe(id); }}
+                    >
+                        <DeleteOutlined style={{ marginRight: 6, fontSize: 12 }} /> Xóa với tôi
+                    </div>
+                )}
             </div>
         );
+
+        // Trigger chỉ bằng đúng bong bóng (width: fit-content) → menu hiện sát ngay dưới tin
+        const narrowWrapper = (
+            <div
+                className="chat-bubble-narrow-wrapper"
+                style={{
+                    display: 'inline-flex',
+                    flexDirection: 'column',
+                    alignItems: isMine ? 'flex-end' : 'flex-start',
+                    width: 'fit-content',
+                    maxWidth: '85%',
+                    minWidth: 0,
+                    cursor: showMessageOptions && !isEditing ? 'pointer' : 'default',
+                }}
+                onClick={showMessageOptions && !isEditing ? () => setMessageOptionsId(isOptionsOpen ? null : msgId) : undefined}
+            >
+                {bubbleContent}
+            </div>
+        );
+
+        const row = (
+            <div
+                key={id || idx}
+                className={`chat-bubble-row${showMessageOptions ? ' chat-bubble-row-clickable' : ''}`}
+                style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: isMine ? 'flex-end' : 'flex-start',
+                    marginBottom: isLastInSequence ? 8 : 2,
+                }}
+            >
+                {showMessageOptions && !isEditing ? (
+                    <Dropdown
+                        overlay={messageOptionsOverlay}
+                        trigger={['click']}
+                        visible={isOptionsOpen}
+                        onVisibleChange={(visible) => setMessageOptionsId(visible ? msgId : null)}
+                        placement={isMine ? 'bottomRight' : 'bottomLeft'}
+                        align={{ offset: [0, 4] }}
+                        getPopupContainer={() => document.querySelector('.chat-drawer .ant-drawer-body') || document.body}
+                    >
+                        {narrowWrapper}
+                    </Dropdown>
+                ) : (
+                    narrowWrapper
+                )}
+            </div>
+        );
+        return row;
     };
 
     // ============================================
@@ -1330,7 +1437,7 @@ export default function ChatWidget() {
                         <div style={{ flex: 1, overflow: 'auto', padding: '12px 12px 4px 12px', display: 'flex', flexDirection: 'column', background: '#ffffff' }}>
                             {messagesToShow.length > 0 ? (
                                 messagesToShow.map((msg, idx) => renderMessageBubble(msg, idx, messagesToShow))
-                            ) : formattedMessages.length > 0 ? (
+                            ) : searchInChat.trim() && formattedMessages.length > 0 ? (
                                 <div style={{ padding: 12, color: '#65676b', textAlign: 'center' }}>Không có tin nhắn nào khớp &quot;{searchInChat}&quot;</div>
                             ) : (
                                 <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100%', color: '#65676b', gap: 12 }}>
@@ -1382,20 +1489,6 @@ export default function ChatWidget() {
                     </div>
                 )}
             </Drawer>
-
-            {/* Edit Message Modal */}
-            <Modal
-                title="Sửa tin nhắn"
-                open={!!editingMessageId}
-                onOk={() => editingMessageId && editingText.trim() && handleEditMessage(editingMessageId, editingText.trim())}
-                onCancel={() => { setEditingMessageId(null); setEditingText(''); }}
-                okText="Lưu"
-                cancelText="Hủy"
-                destroyOnClose
-                confirmLoading={editLoading}
-            >
-                <Input.TextArea rows={4} value={editingText} onChange={(e) => setEditingText(e.target.value)} placeholder="Nội dung tin nhắn" />
-            </Modal>
 
             {/* Delete Confirmation Modal */}
             <Modal
@@ -1463,6 +1556,50 @@ export default function ChatWidget() {
                 }
                 .ant-dropdown-menu-item:hover {
                     background-color: #f5f5f5 !important;
+                }
+                .chat-option-item {
+                    padding: 5px 8px;
+                    font-size: 12px;
+                    cursor: pointer;
+                    transition: background 0.15s ease;
+                    display: flex;
+                    align-items: center;
+                    white-space: nowrap;
+                }
+                .chat-option-item:hover {
+                    background-color: #f0f2f5 !important;
+                }
+                .chat-option-item--danger {
+                    color: #ff4d4f;
+                }
+                .chat-option-item--loading {
+                    color: #8c8c8c;
+                    cursor: default;
+                }
+                .chat-message-options-dropdown {
+                    background: #fff;
+                    border-radius: 8px;
+                    box-shadow: 0 2px 12px rgba(0,0,0,0.12);
+                    padding: 2px 0;
+                    width: max-content;
+                    min-width: 88px;
+                    animation: chatOptionsSlide 0.2s ease;
+                }
+                @keyframes chatOptionsSlide {
+                    from {
+                        opacity: 0;
+                        transform: translateY(-4px);
+                    }
+                    to {
+                        opacity: 1;
+                        transform: translateY(0);
+                    }
+                }
+                .chat-bubble-row-clickable:hover .chat-bubble-mine:not(.chat-bubble-recalled) {
+                    opacity: 0.92;
+                }
+                .chat-edit-inline .ant-input {
+                    border-radius: 8px;
                 }
             `}</style>
         </>

@@ -403,7 +403,6 @@ function ProfileForm(props) {
                                             <Input 
                                                 prefix={<UserOutlined style={{ color: '#bfbfbf' }} />}
                                                 placeholder="Nhập họ và tên"
-                                                defaultValue={data.name}
                                             />
                                         </Form.Item>
                                     </Col>
@@ -411,7 +410,6 @@ function ProfileForm(props) {
                                         <Form.Item label="Email" name="email">
                                             <Input 
                                                 prefix={<MailOutlined style={{ color: '#bfbfbf' }} />}
-                                                defaultValue={data.email}
                                                 disabled
                                                 style={{ backgroundColor: '#f5f5f5' }}
                                             />
@@ -428,7 +426,6 @@ function ProfileForm(props) {
                                             <Input 
                                                 prefix={<PhoneOutlined style={{ color: '#bfbfbf' }} />}
                                                 placeholder="Nhập số điện thoại"
-                                                defaultValue={data.phone_number}
                                             />
                                         </Form.Item>
                                     </Col>
@@ -436,7 +433,6 @@ function ProfileForm(props) {
                                         <Form.Item label="Mã nhân viên">
                                             <Input 
                                                 prefix={<IdcardOutlined style={{ color: '#bfbfbf' }} />}
-                                                defaultValue={data.vnu_id || data.student_code}
                                                 disabled
                                                 style={{ backgroundColor: '#f5f5f5' }}
                                             />
@@ -530,7 +526,6 @@ function ProfileForm(props) {
                                             <Input 
                                                 prefix={<UserOutlined style={{ color: '#bfbfbf' }} />}
                                                 placeholder="Nhập họ và tên"
-                                                defaultValue={data.name}
                                             />
                                         </Form.Item>
                                     </Col>
@@ -538,7 +533,6 @@ function ProfileForm(props) {
                                         <Form.Item label="MSSV" name="student_code">
                                             <Input 
                                                 prefix={<IdcardOutlined style={{ color: '#bfbfbf' }} />}
-                                                defaultValue={data.student_code || data.vnu_id}
                                                 disabled
                                                 style={{ backgroundColor: '#f5f5f5' }}
                                             />
@@ -549,7 +543,6 @@ function ProfileForm(props) {
                                             <DatePicker
                                                 style={{ width: '100%' }}
                                                 placeholder="Chọn ngày sinh"
-                                                defaultValue={formatTimestampToMoment(data.date_of_birth)}
                                                 format={DATE_FORMAT}
                                                 locale={locale}
                                             />
@@ -559,7 +552,6 @@ function ProfileForm(props) {
                                         <Form.Item label="Email" name="email">
                                             <Input 
                                                 prefix={<MailOutlined style={{ color: '#bfbfbf' }} />}
-                                                defaultValue={data.email}
                                                 disabled
                                                 style={{ backgroundColor: '#f5f5f5' }}
                                             />
@@ -576,7 +568,6 @@ function ProfileForm(props) {
                                             <Input 
                                                 prefix={<PhoneOutlined style={{ color: '#bfbfbf' }} />}
                                                 placeholder="Nhập số điện thoại"
-                                                defaultValue={data.phone_number}
                                             />
                                         </Form.Item>
                                     </Col>
@@ -591,7 +582,6 @@ function ProfileForm(props) {
                                             <Input 
                                                 prefix={<PhoneOutlined style={{ color: '#bfbfbf' }} />}
                                                 placeholder="Nhập SĐT phụ huynh"
-                                                defaultValue={data.parent_number}
                                             />
                                         </Form.Item>
                                     </Col>
@@ -599,7 +589,6 @@ function ProfileForm(props) {
                                         <Form.Item label="Địa chỉ" name="address">
                                             <Input 
                                                 placeholder="Nhập địa chỉ liên hệ"
-                                                defaultValue={data.address}
                                             />
                                         </Form.Item>
                                     </Col>
@@ -619,7 +608,6 @@ function ProfileForm(props) {
                                             <Input 
                                                 prefix={<TeamOutlined style={{ color: '#bfbfbf' }} />}
                                                 placeholder="VD: K66-CA-CLC1"
-                                                defaultValue={data.class_name || data.class}
                                             />
                                         </Form.Item>
                                     </Col>
@@ -628,7 +616,6 @@ function ProfileForm(props) {
                                             <Input 
                                                 prefix={<BankOutlined style={{ color: '#bfbfbf' }} />}
                                                 placeholder="VD: Công nghệ thông tin"
-                                                defaultValue={data.faculty}
                                             />
                                         </Form.Item>
                                     </Col>
@@ -637,7 +624,6 @@ function ProfileForm(props) {
                                             <Input 
                                                 prefix={<BookOutlined style={{ color: '#bfbfbf' }} />}
                                                 placeholder="VD: Khoa học máy tính"
-                                                defaultValue={data.major}
                                             />
                                         </Form.Item>
                                     </Col>

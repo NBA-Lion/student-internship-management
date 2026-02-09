@@ -29,18 +29,41 @@ function useAuthWrapper() {
     async function login(param) {
         console.log(">>> [Auth] Đang đăng nhập với Backend mới...");
 
-        // Backend mới nhận { student_code, password }
         const payload = param && (param.username !== undefined)
             ? { student_code: param.username, password: param.password }
             : param;
 
-        const response = await fetchWrapper.post("/api/auth/login", "application/json", payload);
+        let response;
+        try {
+            response = await fetchWrapper.post("/api/auth/login", "application/json", payload);
+        } catch (e) {
+            const msg = (e && e.message) || "";
+            const isNetwork = /failed to fetch|network|connection|refused/i.test(msg);
+            setAlert({
+                message: "Lỗi kết nối",
+                description: isNetwork ? "Không kết nối được máy chủ. Kiểm tra backend đã chạy chưa (npm start tại thư mục gốc)." : (msg || "Đăng nhập thất bại"),
+            });
+            return { status: "Error", data: isNetwork ? "Không kết nối được máy chủ" : (msg || "Đăng nhập thất bại") };
+        }
+
         if (!response) {
-            console.log(">>> [Lỗi] Không kết nối được Server");
+            setAlert({ message: "Lỗi kết nối", description: "Không có phản hồi từ máy chủ." });
             return { status: "Error", data: "Không kết nối được Server" };
         }
 
-        const rawjson = await response.json();
+        let rawjson;
+        try {
+            rawjson = response._data != null ? response._data : await response.json();
+        } catch (_) {
+            setAlert({ message: "Lỗi kết nối", description: "Phản hồi từ máy chủ không hợp lệ." });
+            return { status: "Error", data: "Phản hồi không hợp lệ" };
+        }
+
+        // Bật 2FA: backend trả requires2FA + tempToken → không lưu token, báo client hiện bước nhập mã
+        if (rawjson.requires2FA && rawjson.tempToken) {
+            return { status: "Requires2FA", tempToken: rawjson.tempToken, message: rawjson.message };
+        }
+
         // Backend mới trả về { user, token }
         const { user, token } = rawjson || {};
 
@@ -149,6 +172,59 @@ function useAuthWrapper() {
     }
     
 
+    /** Gửi mã TOTP sau bước login (khi backend trả requires2FA). Trả về cùng format như login. */
+    async function verify2FALogin(tempToken, code) {
+        if (!tempToken || !code) {
+            setAlert({ message: "Lỗi", description: "Vui lòng nhập mã 6 số" });
+            return { status: "Error", data: "Vui lòng nhập mã 6 số" };
+        }
+        try {
+            const response = await fetchWrapper.post("/api/auth/2fa/verify-login", "application/json", { tempToken, code: String(code).trim() });
+            const rawjson = response._data != null ? response._data : await response.json();
+            if (!rawjson || rawjson.status !== "Success" || !rawjson.user || !rawjson.token) {
+                setAlert({ message: "Xác thực thất bại", description: rawjson?.message || "Mã không đúng hoặc đã hết hạn." });
+                return { status: "Error", data: rawjson?.message || "Mã không đúng." };
+            }
+            const { user, token } = rawjson;
+            setLoginToken(token);
+            const userProfile = {
+                _id: user._id,
+                full_name: user.full_name,
+                email: user.email,
+                student_code: user.student_code,
+                role: user.role,
+                phone: user.phone,
+                dob: user.dob,
+                university: user.university,
+                faculty: user.faculty,
+                major: user.major,
+                internship_unit: user.internship_unit,
+                internship_topic: user.internship_topic,
+                internship_period: user.internship_period,
+                start_date: user.start_date,
+                end_date: user.end_date,
+                cv_url: user.cv_url,
+                recommendation_letter_url: user.recommendation_letter_url,
+                registration_status: user.registration_status,
+                mentor_name: user.mentor_name,
+                mentor_feedback: user.mentor_feedback,
+                final_grade: user.final_grade,
+                admin_note: user.admin_note,
+            };
+            setUserData(userProfile);
+            setAlert({ message: "Đăng nhập thành công", description: `Chào ${user.full_name || ""}` });
+            return { status: "Success", data: userProfile, token };
+        } catch (e) {
+            const msg = (e && e.message) || "";
+            const isNetwork = /failed to fetch|network|connection|refused/i.test(msg);
+            setAlert({
+                message: "Lỗi",
+                description: isNetwork ? "Không kết nối được máy chủ. Kiểm tra backend đã chạy." : (msg || "Xác thực thất bại"),
+            });
+            return { status: "Error", data: isNetwork ? "Không kết nối được máy chủ" : (msg || "Xác thực thất bại") };
+        }
+    }
+
     /** Đăng nhập bằng token + user (sau khi đăng ký thành công), không gọi API login. */
     function loginWithToken(user, token) {
         if (!user || !token) return { status: "Error", data: "Thiếu user hoặc token" };
@@ -201,6 +277,7 @@ function useAuthWrapper() {
         login,
         logout,
         loginWithToken,
+        verify2FALogin,
         tokenValue: auth,
         getUserInfo,
         forgetPassword,

@@ -9,8 +9,9 @@
 }
 
 .chat-bubble {
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
   border: none;
+  border-radius: 18px;
 }
 
 .chat-bubble-mine {
@@ -27,12 +28,19 @@
   font-size: 14px;
   line-height: 1.5;
   letter-spacing: 0.01em;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Bong bóng không bị ép quá hẹp → chữ giữ hàng ngang */
+.chat-bubble:not(.chat-bubble-image):not(.chat-edit-inline) {
+  min-width: 80px;
 }
 
 .chat-bubble-meta {
   font-size: 11px;
   color: #65676b;
-  margin-top: 4px;
+  margin-top: 2px;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -103,15 +111,32 @@
   text-decoration: underline;
 }
 
+/* Tin đã thu hồi: chữ xám, in nghiêng, không background bong bóng, không copy */
+.chat-bubble-recalled {
+  background: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+  user-select: none;
+  -webkit-user-select: none;
+}
 .chat-bubble-recalled .chat-bubble-text {
   font-style: italic;
-  opacity: 0.85;
+  color: #8a8d91;
 }
 
 .chat-edited-label {
   font-size: 10px;
   opacity: 0.8;
   margin-top: 4px;
+}
+
+/* "Đã chỉnh sửa" phía trên bong bóng (tin của mình) giống mẫu */
+.chat-edited-label--above {
+  margin-top: 0;
+  margin-bottom: 2px;
+  font-size: 11px;
+  color: #8a8d91;
+  align-self: flex-end;
 }
 
 .chat-reactions-wrap { align-items: center; }

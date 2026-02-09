@@ -66,15 +66,19 @@ export default function ConversationList(props) {
           <ToolbarButton key="add" icon="ion-ios-add-circle-outline" />
         ]}
       />
-      {conversationsList.map(conversation => (
-        <Link to={`/chat/${conversation.vnu_id}`} key={conversation.vnu_id}>
-          <ConversationListItem
-            data={conversation}
-            picked={conversation.vnu_id === chatWrapper.curChatPerson}
-            unreadCount={conversation.unreadCount}
-          />
-        </Link>
-      ))}
+      {conversationsList.map((conversation, idx) => {
+        const vnuId = conversation.vnu_id;
+        if (vnuId == null || vnuId === '') return null;
+        return (
+          <Link to={`/chat/${vnuId}`} key={vnuId}>
+            <ConversationListItem
+              data={conversation}
+              picked={vnuId === chatWrapper.curChatPerson}
+              unreadCount={conversation.unreadCount}
+            />
+          </Link>
+        );
+      })}
     </div>
   );
 }

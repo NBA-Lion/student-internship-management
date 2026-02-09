@@ -16,6 +16,7 @@ function useUserActions () {
     const [curClass, setCurClass] = useRecoilState(currentClassAtom)
     return {
         login,
+        verify2FALogin,
         logout,
         register,
         update,
@@ -27,24 +28,38 @@ function useUserActions () {
     async function login({ username, password }) {
         let response = { status: "", data: "" };
         try {
-            // Gọi backend mới: /api/auth/login -> { user, token }
             response = await authWrapper.login({ username, password });
 
+            if (response.status === "Requires2FA") {
+                return response;
+            }
             if (response.status !== "Success") {
                 throw new Error(response.data || "Đăng nhập thất bại");
             }
 
-            // Điều hướng về trang trước đó hoặc dashboard
             const { from } =
                 (history.location && history.location.state && history.location.state.from) ||
                 { from: { pathname: "/" } };
             history.push(from);
+            return response;
         } catch (e) {
             setAlert({
                 message: "Lỗi",
                 description: (response && response.data) || e.message || "Đăng nhập thất bại",
             });
+            return response;
         }
+    }
+
+    async function verify2FALogin(tempToken, code) {
+        const response = await authWrapper.verify2FALogin(tempToken, code);
+        if (response.status === "Success") {
+            const { from } =
+                (history.location && history.location.state && history.location.state.from) ||
+                { from: { pathname: "/" } };
+            history.push(from);
+        }
+        return response;
     }
 
     async function logout() {

@@ -1,61 +1,40 @@
-import React, { useEffect } from 'react'
+import React, { useEffect } from 'react';
 import { useRecoilState } from 'recoil';
 import { alertBachAtom } from '_state/alert_bach';
-  import { Button, notification, Divider, Space } from 'antd';
-  import {
-    RadiusUpleftOutlined,
-    RadiusUprightOutlined,
-    RadiusBottomleftOutlined,
-    RadiusBottomrightOutlined,
-  } from '@ant-design/icons';
-  
-  const Context = React.createContext({ name: 'Default' });
-  
-  function Notification() {
-    const [notification_, setNoti] = useRecoilState(alertBachAtom);
-    const openNotification = (message, description) => {
-      if (message.includes('Lỗi') || message.includes('Thất bại') || message.includes('Error') || message.includes('Err'))
-        notification.error({
-          message: message,
-          description: description,
-          onClick: () => {
-            console.log('Notification Clicked!');
-          },
-        });
-      else if (message.includes('Thành công') || message.toLowerCase().includes('thanh cong') || message.includes('Success') || description.includes('Thành công') || description.includes('Success') ){
-        notification.success({
-          message: message,
-          description: description,
-          onClick: () => {
-            console.log('Notification Clicked!');
-          },
-        });
+import { notification } from 'antd';
+
+const CLEAR = { message: null, description: null };
+
+function Notification() {
+  const [notification_, setNoti] = useRecoilState(alertBachAtom);
+
+  const openNotification = (message, description) => {
+    const msg = message != null ? String(message) : '';
+    const desc = description != null ? String(description) : '';
+    try {
+      if (typeof notification === 'undefined' || !notification.open) return;
+      if (msg.includes('Lỗi') || msg.includes('Thất bại') || msg.includes('Error') || msg.includes('Err')) {
+        notification.error({ message: msg, description: desc });
+      } else if (msg.includes('Thành công') || msg.toLowerCase().includes('thanh cong') || msg.includes('Success') || desc.includes('Thành công') || desc.includes('Success')) {
+        notification.success({ message: msg, description: desc });
+      } else if (msg.includes('Cảnh báo') || msg.toLowerCase().includes('canh bao') || msg.includes('Warning') || desc.toLowerCase().includes('warning') || desc.toLowerCase().includes('canh bao')) {
+        notification.warning({ message: msg, description: desc });
+      } else {
+        notification.open({ message: msg, description: desc });
       }
-      else if (message.includes('Cảnh báo') || message.toLowerCase().includes('canh bao') || message.includes('Warning') || description.toLowerCase().includes('warning') || description.toLowerCase().includes('canh bao') ){
-        notification.success({
-          message: message,
-          description: description,
-          onClick: () => {
-            console.log('Notification Clicked!');
-          },
-        });
-      }
-      else {
-        notification.open({
-          message: message,
-          description: description,
-          onClick: () => {
-            console.log('Notification Clicked!');
-          },
-        });
-      }
-    };
-    useEffect(() => {
-      if (notification_.message || notification_.description)
-        openNotification(notification_.message, notification_.description);
-    },[notification_])
-    return (
-      <></>
-    );
+    } catch (e) {
+      console.warn('[Notification]', e);
+    }
   };
-  export {Notification};
+
+  useEffect(() => {
+    if (notification_.message != null || notification_.description != null) {
+      openNotification(notification_.message, notification_.description);
+      setNoti(CLEAR);
+    }
+  }, [notification_]);
+
+  return null;
+}
+
+export { Notification };

@@ -1,9 +1,8 @@
 import { useHistory } from 'react-router-dom';
 import { useRecoilState } from 'recoil';
 import { Breadcrumb } from 'antd';
-import { useProfileAction } from '_actions';
 import { profileAtom } from '_state';
-import { ProfileForm } from '_components/profile';
+import { ProfileForm, TwoFASection } from '_components/profile';
 
 export { Profile };
 
@@ -17,6 +16,9 @@ function Profile() {
                 <Breadcrumb.Item>Hồ sơ cá nhân</Breadcrumb.Item>
             </Breadcrumb>
             <ProfileForm data={profile} isTable={false} />
+            <div style={{ maxWidth: 900, margin: '0 auto', padding: '0 24px 24px' }}>
+                <TwoFASection />
+            </div>
         </div>
     );
 }

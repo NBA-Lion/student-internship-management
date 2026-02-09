@@ -265,7 +265,8 @@ router.put("/message/:id", authMiddleware, async (req, res) => {
   }
 });
 
-// DELETE /api/chat/message/:id — Thu hồi một tin nhắn (chỉ người gửi)
+// DELETE /api/chat/message/:id — Thu hồi tin nhắn (Soft Delete: deleted=true, không xóa bản ghi)
+// Real-time: emit MessageDeleted cho cả người gửi và người nhận (Socket.IO)
 router.delete("/message/:id", authMiddleware, async (req, res) => {
   try {
     const my = req.user.student_code;

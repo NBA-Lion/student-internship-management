@@ -142,10 +142,11 @@ export default function MessageList(props) {
       id: result._id,
       author: result.from?.vnu_id || result.sender,
       message: result.message || result.content,
-      timestamp: new Date(result.createdDate || result.createdAt || result.timestamp),
+      timestamp: new Date(result.createdDate || result.createdAt || result.timestamp || 0),
       is_read: !!result.is_read,
       reactions: result.reactions || [],
-      type: result.type
+      type: result.type,
+      deleted: !!result.deleted
     }));
   }, [chatWrapper.curListMessages, fetchDone, currentUserId, partnerId]);
 
@@ -195,7 +196,7 @@ export default function MessageList(props) {
     const applyRecall = (messageId) => {
       if (!messageId) return;
       chatWrapper.setCurListMessage(prev => (prev || []).map(m =>
-        String(m._id) === String(messageId) ? { ...m, message: 'Tin nhắn đã được thu hồi', type: 'recalled', attachment_url: null } : m
+        String(m._id) === String(messageId) ? { ...m, message: 'Tin nhắn đã được thu hồi', type: 'recalled', deleted: true, attachment_url: null, reactions: [] } : m
       ));
     };
     const handleMessageDeleted = (data) => applyRecall(data?.messageId ?? data);

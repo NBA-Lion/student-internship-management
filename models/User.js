@@ -73,7 +73,11 @@ const UserSchema = new mongoose.Schema(
 
     // === RESET PASSWORD (Forgot Password flow) ===
     resetPasswordToken: { type: String, default: null },
-    resetPasswordExpire: { type: Date, default: null }
+    resetPasswordExpire: { type: Date, default: null },
+
+    // === XÁC THỰC 2 BƯỚC (TOTP - Google Authenticator) ===
+    totpSecret: { type: String, default: null },
+    totpEnabled: { type: Boolean, default: false }
   },
   { timestamps: true }
 );

@@ -1,8 +1,17 @@
 const express = require("express");
 const bcrypt = require("bcryptjs");
 const User = require("../models/User");
-const { generateToken } = require("../middleware/auth");
-const { forgotPassword, resetPassword } = require("../controllers/authController");
+const { generateToken, generateTempToken } = require("../middleware/auth");
+const { authMiddleware } = require("../middleware/auth");
+const {
+  forgotPassword,
+  resetPassword,
+  twofaStatus,
+  twofaSetup,
+  twofaVerifySetup,
+  twofaVerifyLogin,
+  twofaDisable,
+} = require("../controllers/authController");
 
 const router = express.Router();
 
@@ -33,6 +42,16 @@ router.post("/login", async (req, res) => {
       : user.password === password;
     if (!passwordMatch) {
       return res.status(401).json({ message: "Invalid credentials" });
+    }
+
+    // Nếu user bật 2FA (TOTP): trả tempToken, không trả token thật
+    if (user.totpEnabled && user.totpSecret) {
+      const tempToken = generateTempToken(user._id);
+      return res.json({
+        requires2FA: true,
+        tempToken,
+        message: "Nhập mã từ ứng dụng xác thực (Google Authenticator)",
+      });
     }
 
     // Tạo JWT token thật
@@ -80,5 +99,12 @@ router.post("/forgot-password", forgotPassword); // alias
 
 // Reset password: token + newPassword (bcrypt)
 router.post("/reset-password", resetPassword);
+
+// ---------- TOTP 2FA ----------
+router.get("/2fa/status", authMiddleware, twofaStatus);
+router.post("/2fa/verify-login", twofaVerifyLogin);
+router.post("/2fa/setup", authMiddleware, twofaSetup);
+router.post("/2fa/verify-setup", authMiddleware, twofaVerifySetup);
+router.post("/2fa/disable", authMiddleware, twofaDisable);
 
 module.exports = router;

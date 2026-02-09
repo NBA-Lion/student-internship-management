@@ -100,3 +100,13 @@
   margin-left: 4px;
   align-self: flex-end;
 }
+
+/* Tin đã thu hồi: chữ xám, in nghiêng, không background, không copy */
+.message.recalled .bubble {
+  background: transparent !important;
+  box-shadow: none !important;
+  color: #8a8d91 !important;
+  font-style: italic;
+  user-select: none;
+  -webkit-user-select: none;
+}

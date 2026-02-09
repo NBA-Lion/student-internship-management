@@ -20,6 +20,10 @@ function Login(props) {
     const auth = useRecoilValue(authAtom);
     const authWrapper = useAuthWrapper();
     const [loginDone, setLoginDone] = useState(false);
+    const [step2FA, setStep2FA] = useState(false);
+    const [tempToken, setTempToken] = useState(null);
+    const [code2FA, setCode2FA] = useState('');
+    const [submitting2FA, setSubmitting2FA] = useState(false);
     const search = new URLSearchParams(location.search || '');
     const isExpired = search.get('expired') === '1';
     const fromPath = search.get('from'); // Trang cần quay lại sau khi đăng nhập (vd: /admin/students)
@@ -116,7 +120,13 @@ function Login(props) {
                             <p>Đăng nhập để tiếp tục sử dụng hệ thống</p>
                         </motion.div>
 
-                        <form onSubmit={handleSubmit(userActions.login)}>
+                        <form onSubmit={handleSubmit(async (data) => {
+                            const res = await userActions.login(data);
+                            if (res && res.status === 'Requires2FA') {
+                                setTempToken(res.tempToken);
+                                setStep2FA(true);
+                            }
+                        })}>
                             <motion.div 
                                 className="form-group"
                                 custom={1}
@@ -176,27 +186,75 @@ function Login(props) {
                                 {errors.password && <span className="error-msg">{errors.password.message}</span>}
                             </motion.div>
 
-                            <motion.button 
-                                type="submit" 
-                                disabled={isSubmitting} 
-                                className="submit-btn"
-                                tabIndex={0}
-                                custom={3}
-                                variants={formItemVariants}
-                                initial="hidden"
-                                animate="visible"
-                                whileHover={{ scale: 1.02 }}
-                                whileTap={{ scale: 0.98 }}
-                            >
-                                {isSubmitting ? (
-                                    <>
-                                        <span className="spinner"></span>
-                                        Đang xử lý...
-                                    </>
-                                ) : (
-                                    'Đăng nhập'
-                                )}
-                            </motion.button>
+                            {step2FA ? (
+                                <>
+                                    <motion.div className="form-group" custom={3} variants={formItemVariants} initial="hidden" animate="visible">
+                                        <label>Mã xác thực 2 bước</label>
+                                        <div className="input-wrapper">
+                                            <input
+                                                type="text"
+                                                inputMode="numeric"
+                                                autoComplete="one-time-code"
+                                                placeholder="Nhập mã 6 số từ app"
+                                                value={code2FA}
+                                                onChange={(e) => setCode2FA(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                                                maxLength={6}
+                                                className=""
+                                            />
+                                            <span className="input-focus-border"></span>
+                                        </div>
+                                        <p style={{ fontSize: 12, color: '#65676b', marginTop: 6 }}>
+                                            Mở Google Authenticator (hoặc app tương tự) và nhập mã 6 số.
+                                        </p>
+                                    </motion.div>
+                                    <motion.div style={{ display: 'flex', gap: 8 }} custom={4} variants={formItemVariants}>
+                                        <button
+                                            type="button"
+                                            className="submit-btn"
+                                            style={{ flex: 1, background: '#e4e6eb', color: '#050505' }}
+                                            onClick={() => { setStep2FA(false); setTempToken(null); setCode2FA(''); }}
+                                        >
+                                            Quay lại
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="submit-btn"
+                                            style={{ flex: 1 }}
+                                            disabled={code2FA.length !== 6 || submitting2FA}
+                                            onClick={async () => {
+                                                setSubmitting2FA(true);
+                                                const res = await userActions.verify2FALogin(tempToken, code2FA);
+                                                setSubmitting2FA(false);
+                                                if (res && res.status === 'Success') setLoginDone(true);
+                                            }}
+                                        >
+                                            {submitting2FA ? <><span className="spinner"></span> Đang xác thực...</> : 'Xác thực'}
+                                        </button>
+                                    </motion.div>
+                                </>
+                            ) : (
+                                <motion.button 
+                                    type="submit" 
+                                    disabled={isSubmitting} 
+                                    className="submit-btn"
+                                    tabIndex={0}
+                                    custom={3}
+                                    variants={formItemVariants}
+                                    initial="hidden"
+                                    animate="visible"
+                                    whileHover={{ scale: 1.02 }}
+                                    whileTap={{ scale: 0.98 }}
+                                >
+                                    {isSubmitting ? (
+                                        <>
+                                            <span className="spinner"></span>
+                                            Đang xử lý...
+                                        </>
+                                    ) : (
+                                        'Đăng nhập'
+                                    )}
+                                </motion.button>
+                            )}
                         </form>
 
                         <motion.div 

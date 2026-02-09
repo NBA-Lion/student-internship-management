@@ -14,22 +14,29 @@ export default function Message(props) {
       reactions = []
     } = props;
 
-    const friendlyTimestamp = moment(data.timestamp).format('LLLL');
-    const shortTime = moment(data.timestamp).format('HH:mm');
-    // Gom reaction theo emoji: { emoji: count }
-    const reactionGroups = (Array.isArray(reactions) ? reactions : []).reduce((acc, r) => {
+    if (!data) return null;
+
+    const isRecalled = data.deleted === true || data.type === 'recalled';
+    const ts = data.timestamp != null ? data.timestamp : 0;
+    const friendlyTimestamp = moment(ts).format('LLLL');
+    const shortTime = moment(ts).format('HH:mm');
+    const reactionGroups = isRecalled ? {} : (Array.isArray(reactions) ? reactions : []).reduce((acc, r) => {
       const e = r.emoji || r;
       acc[e] = (acc[e] || 0) + 1;
       return acc;
     }, {});
 
     return (
-      <div className={[
-        'message',
-        `${isMine ? 'mine' : ''}`,
-        `${startsSequence ? 'start' : ''}`,
-        `${endsSequence ? 'end' : ''}`
-      ].join(' ')}>
+      <div
+        className={[
+          'message',
+          `${isMine ? 'mine' : ''}`,
+          `${startsSequence ? 'start' : ''}`,
+          `${endsSequence ? 'end' : ''}`,
+          isRecalled ? 'recalled' : ''
+        ].filter(Boolean).join(' ')}
+        onContextMenu={isRecalled ? (e) => e.preventDefault() : undefined}
+      >
         {
           showTimestamp &&
             <div className="timestamp">
@@ -38,8 +45,8 @@ export default function Message(props) {
         }
 
         <div className="bubble-container">
-          <div className="bubble" title={friendlyTimestamp}>
-            { data.message }
+          <div className="bubble" title={isRecalled ? 'Tin đã thu hồi' : friendlyTimestamp}>
+            { data.message ?? data.content ?? '' }
           </div>
           {endsSequence && Object.keys(reactionGroups).length > 0 && (
             <div className="message-reactions" style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
