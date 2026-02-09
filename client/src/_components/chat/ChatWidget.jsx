@@ -57,6 +57,51 @@ function chatReducer(state, action) {
         
         case 'SET_MESSAGES':
             return { ...state, currentMessages: action.payload };
+
+        // Chỉ dùng khi nhận echo tin CỦA MÌNH từ server: thay optimistic bằng bản server, KHÔNG BAO GIỜ thêm mới → tránh double
+        case 'REPLACE_OPTIMISTIC_WITH_SERVER': {
+            const { serverMessage, partnerId, myId } = action.payload;
+            const list = [...state.currentMessages];
+            const contentStr = (serverMessage.message || serverMessage.content || '').toString().trim();
+            let idx = -1;
+            for (let i = list.length - 1; i >= 0; i--) {
+                const m = list[i];
+                const fromMe = (m.from?.vnu_id || m.sender) === myId;
+                const sameContent = (m.message || m.content || '').toString().trim() === contentStr;
+                if (fromMe && (m._isOptimistic || sameContent)) {
+                    idx = i;
+                    break;
+                }
+            }
+            if (idx >= 0) {
+                list[idx] = { ...serverMessage, _isOptimistic: false };
+            } else {
+                // Echo tới trước optimistic: thêm 1 lần duy nhất
+                list.push({ ...serverMessage, _isOptimistic: false });
+            }
+            const otherUserId = (serverMessage.from?.vnu_id || serverMessage.sender) === myId
+                ? (serverMessage.to?.vnu_id || serverMessage.receiver)
+                : (serverMessage.from?.vnu_id || serverMessage.sender);
+            let newConversations = [...state.conversations];
+            const convIndex = newConversations.findIndex(c =>
+                c.partner_id === otherUserId || c.partner?.vnu_id === otherUserId || c.partner?.student_code === otherUserId
+            );
+            if (convIndex >= 0) {
+                const conv = { ...newConversations[convIndex] };
+                conv.last_message = {
+                    _id: serverMessage._id,
+                    message: serverMessage.message,
+                    type: serverMessage.type,
+                    sender: serverMessage.from?.vnu_id || serverMessage.sender,
+                    is_mine: true,
+                    createdAt: serverMessage.createdAt
+                };
+                conv.timestamp = serverMessage.createdAt;
+                newConversations.splice(convIndex, 1);
+                newConversations.unshift(conv);
+            }
+            return { ...state, currentMessages: list, conversations: newConversations };
+        }
         
         case 'ADD_MESSAGE': {
             const { message, partnerId, myId } = action.payload;
@@ -466,17 +511,13 @@ export default function ChatWidget() {
             const isRelevantToCurrentChat = isFromCurrentPartner || isToCurrentPartner;
 
             // ============================================
-            // CASE 1: My own message coming back from server
-            // Skip if we already showed it optimistically
+            // CASE 1: Tin CỦA MÌNH từ server (echo) — CHỈ thay thế optimistic, KHÔNG thêm mới → hết double
             // ============================================
             if (isMyMessage) {
-                // Server confirmed our message - we already showed it optimistically
-                // But we need to update conversations list for the preview
-                dispatch({ 
-                    type: 'ADD_MESSAGE', 
-                    payload: { message: msg, partnerId: currentSelectedId, myId: myStudentCode }
+                dispatch({
+                    type: 'REPLACE_OPTIMISTIC_WITH_SERVER',
+                    payload: { serverMessage: msg, partnerId: currentSelectedId, myId: myStudentCode }
                 });
-                console.log('>>> [ChatWidget] Own message confirmed by server');
                 return;
             }
 
