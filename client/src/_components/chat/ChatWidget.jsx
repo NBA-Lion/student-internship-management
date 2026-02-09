@@ -36,6 +36,14 @@ function setMutedPartner(partnerId, muted) {
 const NOTIFICATION_SOUND = 'data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdH2AhYaHiIaGhYSEgoGAf39/f39/gIGBgoODhIWFhYWFhYSEg4KBgH9/fn5+fn5/f4CBgoOEhIWFhYWEhIOCgYF/fn5+fn5+f4CAgYKDhISEhISEg4OCgYB/fn59fX5+fn+AgIGCg4OEhISEg4OCgYB/fn59fX5+fn+AgIGCgoODg4ODg4KBgH9+fX19fn5+f4CAgYKCg4ODg4OCgYGAf359fX19fn5/f4CAgYKCg4ODg4KCgYB/fn19fX19fn5/f4CAgYGCgoKCgoKBgH9+fX19fX5+fn+AgICBgYKCgoKCgYB/f359fX19fn5+f3+AgIGBgoKCgoGBgH9+fn19fX1+fn5/f4CAgYGBgYGBgYB/f359fX19fn5+fn9/gICAgYGBgYGAf39+fn19fX1+fn5+f3+AgICBgYGBgIB/f359fX19fX5+fn5/f4CAgICAgICAgH9/fn59fX19fX5+fn9/f4CAgICAgIB/f39+fn19fX19fn5+fn9/f4CAgICAgH9/f359fX19fX19fn5+fn9/f4CAgICAgH9/fn5+fX19fX19fn5+fn9/f39/f39/f39+fn59fX19fX19fn5+fn9/f39/f39/f35+fn59fX19fX19fn5+fn5/f39/f39/f35+fn59fX19fX19fX5+fn5+f39/f39/f35+fn59fX19fX19fX5+fn5+fn9/f39/f35+fn59fX19fX19fX5+fn5+fn5/f39/f35+fn59fX19fX19fX5+fn5+fn5/f39/f39+fn59fX19fX19fX5+fn5+fn5+f39/f39+fn59fX19fX19fX1+fn5+fn5+fn9/f39+fn59fX19fX19fX1+fn5+fn5+fn5/f39+fn59fX19fX19fX1+fn5+fn5+fn5+f39+fn59fX19fX19fX1+fn5+fn5+fn5+fn5+fn59fX19fX19fX1+fn5+fn5+fn5+fn5+fn59fX19fX19fX19fn5+fn5+fn5+fn5+fn59fX19fX19fX19fn5+fn5+fn5+fn5+fn5+fX19fX19fX19fX5+fn5+fn5+fn5+fn5+fX19fX19fX19fX1+fn5+fn5+fn5+fn5+fn19fX19fX19fX19fn5+fn5+fn5+fn5+fn59fX19fX19fX19fX5+fn5+fn5+fn5+fn5+fX19fX19fX19fX1+fn5+fn5+fn5+fn5+fn19fX19fX19fX19fn5+fn5+fn5+fn5+fn59fX19fX19fX19fX5+fn5+fn5+fn5+fn5+fX19fX19fX19fX1+fn5+fn5+fn5+fn5+fn59fX19fX19fX19fn5+fn5+fn5+fn5+fn59fX19fX19fX19fX5+fn5+fn5+fn5+fn5+fX19fX19fX19fX1+fn5+fn5+fn5+fn5+fn59fX19fX19fX19fX5+fn5+fn5+fn5+fn5+fn59fX19fX19fX1+fn5+fn5+fn5+fn5+fn5+fX19fX19fX19fn5+fn5+fn5+fn5+fn5+fn59fX19fX19fn5+fn5+fn5+fn5+fn5+fn5+fn59fX19fn5+fn5+fn5+fn5+fn5+fn5+fn59fX5+fn5+fn5+fn5+fn5+fn5+fn5+fn59fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5';
 const QUICK_EMOJIS = ['😀', '😂', '😍', '🥰', '😊', '👍', '❤️', '🔥', '👏', '🎉', '😢', '😮'];
 
+// Chuẩn hóa _id (string hoặc ObjectId) thành string — tránh "[object Object]" khi gọi API / so sánh
+function normMessageId(x) {
+  if (x == null) return x;
+  if (typeof x === 'string') return x;
+  if (typeof x === 'object' && typeof x.toString === 'function') return x.toString();
+  return String(x);
+}
+
 // ============================================
 // REDUCER FOR COMPLEX STATE MANAGEMENT
 // ============================================
@@ -55,8 +63,10 @@ function chatReducer(state, action) {
                 unreadTotal: action.payload.reduce((sum, c) => sum + (c.unread_count || 0), 0)
             };
         
-        case 'SET_MESSAGES':
-            return { ...state, currentMessages: action.payload };
+        case 'SET_MESSAGES': {
+            const list = (action.payload || []).map(m => ({ ...m, _id: normMessageId(m._id) }));
+            return { ...state, currentMessages: list };
+        }
 
         // Chỉ dùng khi nhận echo tin CỦA MÌNH từ server: thay optimistic bằng bản server, KHÔNG BAO GIỜ thêm mới → tránh double
         case 'REPLACE_OPTIMISTIC_WITH_SERVER': {
@@ -145,23 +155,24 @@ function chatReducer(state, action) {
                         }
                     }
 
+                    const normalizedMsg = (msg) => ({ ...msg, _id: normMessageId(msg._id) });
                     if (existsById) {
                         // skip add
                     } else if (optimisticIndex >= 0) {
-                        newMessages[optimisticIndex] = { ...message, _isOptimistic: false };
+                        newMessages[optimisticIndex] = normalizedMsg({ ...message, _isOptimistic: false });
                     } else if (contentDupIndex >= 0) {
-                        newMessages[contentDupIndex] = { ...message, _isOptimistic: false };
+                        newMessages[contentDupIndex] = normalizedMsg({ ...message, _isOptimistic: false });
                     } else if (lastMySameIndex >= 0) {
-                        newMessages[lastMySameIndex] = { ...message, _isOptimistic: false };
+                        newMessages[lastMySameIndex] = normalizedMsg({ ...message, _isOptimistic: false });
                     } else if (isMyMessage) {
                         const lastFromMeIndex = newMessages.map((m, i) => ((m.from?.vnu_id || m.sender) === myId ? i : -1)).filter(i => i >= 0).pop();
                         if (lastFromMeIndex !== undefined && lastFromMeIndex >= 0) {
-                            newMessages[lastFromMeIndex] = { ...message, _isOptimistic: false };
+                            newMessages[lastFromMeIndex] = normalizedMsg({ ...message, _isOptimistic: false });
                         } else {
-                            newMessages = [...newMessages, message];
+                            newMessages = [...newMessages, normalizedMsg(message)];
                         }
                     } else {
-                        newMessages = [...newMessages, message];
+                        newMessages = [...newMessages, normalizedMsg(message)];
                     }
                 }
             }
@@ -879,8 +890,8 @@ export default function ChatWidget() {
     const [editLoading, setEditLoading] = useState(false);
 
     const handleRecallMessage = useCallback(async (messageId) => {
-        const idStr = String(messageId);
-        if (idStr.startsWith('temp_')) {
+        const idStr = normMessageId(messageId);
+        if (!idStr || idStr.startsWith('temp_') || idStr === '[object Object]') {
             message.warning('Vui lòng đợi tin nhắn được gửi xong');
             return;
         }
@@ -962,7 +973,7 @@ export default function ChatWidget() {
                 : '';
             
             return {
-                id: msg._id,
+                id: normMessageId(msg._id),
                 text: msg.message,
                 type: msg.type || 'text',
                 attachment_url: msg.attachment_url,
