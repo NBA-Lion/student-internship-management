@@ -75,10 +75,8 @@ function chatReducer(state, action) {
             }
             if (idx >= 0) {
                 list[idx] = { ...serverMessage, _isOptimistic: false };
-            } else {
-                // Echo tới trước optimistic: thêm 1 lần duy nhất
-                list.push({ ...serverMessage, _isOptimistic: false });
             }
+            // Khi idx < 0: KHÔNG push — tránh double. Chỉ giữ optimistic đã hiển thị.
             const otherUserId = (serverMessage.from?.vnu_id || serverMessage.sender) === myId
                 ? (serverMessage.to?.vnu_id || serverMessage.receiver)
                 : (serverMessage.from?.vnu_id || serverMessage.sender);
@@ -490,28 +488,12 @@ export default function ChatWidget() {
         const handleNewMessage = (msg) => {
             const senderId = msg.from?.vnu_id || msg.sender;
             const receiverId = msg.to?.vnu_id || msg.receiver;
-            const isMyMessage = msg.selfSend || msg.isSender || senderId === myStudentCode;
+            // Tin của chính mình: senderId trùng currentUser (myStudentCode) hoặc server gửi selfSend/isSender
+            const isMyMessage = msg.selfSend === true || msg.isSender === true || senderId === myStudentCode;
             const currentSelectedId = selectedUserRef.current?.vnu_id || selectedUserRef.current?.student_code;
-            
-            console.log('>>> [ChatWidget] NewMessage received:', {
-                msgId: msg._id,
-                senderId,
-                receiverId,
-                isMyMessage,
-                currentSelectedId,
-                selfSend: msg.selfSend,
-                isSender: msg.isSender
-            });
 
             // ============================================
-            // CRITICAL: Check if this message is for current conversation
-            // ============================================
-            const isFromCurrentPartner = senderId === currentSelectedId;
-            const isToCurrentPartner = receiverId === currentSelectedId;
-            const isRelevantToCurrentChat = isFromCurrentPartner || isToCurrentPartner;
-
-            // ============================================
-            // CASE 1: Tin CỦA MÌNH từ server (echo) — CHỈ thay thế optimistic, KHÔNG thêm mới → hết double
+            // CHẶN DOUBLE: Tin từ chính mình — KHÔNG add, chỉ replace optimistic (nếu có)
             // ============================================
             if (isMyMessage) {
                 dispatch({
@@ -520,6 +502,10 @@ export default function ChatWidget() {
                 });
                 return;
             }
+
+            // Từ đây trở đi: chỉ tin từ người khác (senderId !== currentUser)
+            const isFromCurrentPartner = senderId === currentSelectedId;
+            const isToCurrentPartner = receiverId === currentSelectedId;
 
             // ============================================
             // CASE 2: Incoming message from the person I'm chatting with
@@ -595,6 +581,7 @@ export default function ChatWidget() {
 
         socket.on('UserTyping', handleTyping);
         socket.on('UserStopTyping', handleStopTyping);
+        // NewMessage: tin của mình chỉ replace optimistic (handleNewMessage return sớm), tin người khác mới add
         socket.on('NewMessage', handleNewMessage);
         socket.on('ConversationDeleted', handleConversationDeleted);
         socket.on('MessagesRead', handleMessagesRead);
