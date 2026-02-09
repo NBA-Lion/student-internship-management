@@ -296,7 +296,7 @@ function chatReducer(state, action) {
         case 'RECALL_MESSAGE': {
             const { messageId } = action.payload;
             const newMessages = state.currentMessages.map(m =>
-                m._id === messageId ? { ...m, message: "Tin nhắn đã được thu hồi", type: "recalled", attachment_url: null } : m
+                String(m._id) === String(messageId) ? { ...m, message: "Tin nhắn đã được thu hồi", type: "recalled", attachment_url: null } : m
             );
             return { ...state, currentMessages: newMessages };
         }
@@ -304,7 +304,7 @@ function chatReducer(state, action) {
         case 'EDIT_MESSAGE': {
             const { messageId, message: newText, editedAt } = action.payload;
             const newMessages = state.currentMessages.map(m =>
-                m._id === messageId ? { ...m, message: newText, editedAt } : m
+                String(m._id) === String(messageId) ? { ...m, message: newText, editedAt } : m
             );
             return { ...state, currentMessages: newMessages };
         }
@@ -875,45 +875,58 @@ export default function ChatWidget() {
         return false;
     }, [selectedUser, auth]);
 
+    const [recallLoadingId, setRecallLoadingId] = useState(null);
+    const [editLoading, setEditLoading] = useState(false);
+
     const handleRecallMessage = useCallback(async (messageId) => {
-        if (String(messageId).startsWith('temp_')) {
+        const idStr = String(messageId);
+        if (idStr.startsWith('temp_')) {
             message.warning('Vui lòng đợi tin nhắn được gửi xong');
             return;
         }
+        setRecallLoadingId(idStr);
         try {
-            const res = await fetch(`${API_BASE}/api/chat/message/${messageId}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${auth}` } });
+            const res = await fetch(`${API_BASE}/api/chat/message/${idStr}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${auth}` } });
             const data = await res.json();
             if (data.status === 'Success') {
-                dispatch({ type: 'RECALL_MESSAGE', payload: { messageId } });
+                dispatch({ type: 'RECALL_MESSAGE', payload: { messageId: idStr } });
+                setSelectedMessageId(null);
             } else {
                 message.error(data.message || 'Không thể thu hồi');
             }
         } catch (err) {
             message.error('Lỗi kết nối');
+        } finally {
+            setRecallLoadingId(null);
         }
     }, [auth]);
 
     const handleEditMessage = useCallback(async (messageId, newText) => {
-        if (String(messageId).startsWith('temp_')) {
+        const idStr = String(messageId);
+        if (idStr.startsWith('temp_')) {
             message.warning('Vui lòng đợi tin nhắn được gửi xong');
             return;
         }
+        setEditLoading(true);
         try {
-            const res = await fetch(`${API_BASE}/api/chat/message/${messageId}`, {
+            const res = await fetch(`${API_BASE}/api/chat/message/${idStr}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${auth}` },
                 body: JSON.stringify({ message: newText })
             });
             const data = await res.json();
             if (data.status === 'Success' && data.data) {
-                dispatch({ type: 'EDIT_MESSAGE', payload: { messageId, message: data.data.message, editedAt: data.data.editedAt } });
+                dispatch({ type: 'EDIT_MESSAGE', payload: { messageId: idStr, message: data.data.message, editedAt: data.data.editedAt } });
                 setEditingMessageId(null);
                 setEditingText('');
+                setSelectedMessageId(null);
             } else {
                 message.error(data.message || 'Không thể sửa');
             }
         } catch (err) {
             message.error('Lỗi kết nối');
+        } finally {
+            setEditLoading(false);
         }
     }, [auth]);
 
@@ -1037,9 +1050,14 @@ export default function ChatWidget() {
                     <>
                         {isMine && type !== 'recalled' && (
                             <span style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 2 }}>
-                                {(type === 'text' || !type) && <span className="chat-recall-link" onClick={() => openEditModal(id, text)}>Sửa</span>}
+                                {(type === 'text' || !type) && (
+                                    <span className="chat-recall-link" onClick={(e) => { e.stopPropagation(); openEditModal(id, text); }} role="button" tabIndex={0}>Sửa</span>
+                                )}
                                 <Popconfirm title="Thu hồi tin nhắn?" onConfirm={() => handleRecallMessage(id)} okText="Thu hồi" cancelText="Hủy">
-                                    <span className="chat-recall-link">Thu hồi</span>
+                                    <span className="chat-recall-link" onClick={(e) => e.stopPropagation()} role="button" tabIndex={0}>
+                                        {recallLoadingId === String(id) ? <LoadingOutlined spin style={{ marginRight: 4 }} /> : null}
+                                        Thu hồi
+                                    </span>
                                 </Popconfirm>
                             </span>
                         )}
@@ -1339,6 +1357,7 @@ export default function ChatWidget() {
                 okText="Lưu"
                 cancelText="Hủy"
                 destroyOnClose
+                confirmLoading={editLoading}
             >
                 <Input.TextArea rows={4} value={editingText} onChange={(e) => setEditingText(e.target.value)} placeholder="Nội dung tin nhắn" />
             </Modal>
