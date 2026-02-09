@@ -100,6 +100,24 @@ function chatReducer(state, action) {
                     // Tin của mình trùng nội dung → thay bản cũ bằng bản server (tránh 2 bong bóng)
                     console.log('>>> [Reducer] Replacing content-duplicate my message:', message._id);
                     newMessages[contentDupIndex] = { ...message, _isOptimistic: false };
+                } else if (isMyMessage) {
+                    // Fallback: tin của mình nhưng không khớp optimistic/receiver — thay tin cuối cùng cùng nội dung (tránh sender thấy 2 tin)
+                    const contentStr = (message.message || message.content || '').toString();
+                    let lastSameIndex = -1;
+                    for (let i = newMessages.length - 1; i >= 0; i--) {
+                        const m = newMessages[i];
+                        const fromMe = (m.from?.vnu_id || m.sender) === myId;
+                        const sameContent = (m.message || m.content || '').toString() === contentStr;
+                        if (fromMe && sameContent) {
+                            lastSameIndex = i;
+                            break;
+                        }
+                    }
+                    if (lastSameIndex >= 0) {
+                        newMessages[lastSameIndex] = { ...message, _isOptimistic: false };
+                    } else {
+                        newMessages = [...newMessages, message];
+                    }
                 } else {
                     console.log('>>> [Reducer] Adding new message:', message._id);
                     newMessages = [...newMessages, message];
@@ -567,7 +585,10 @@ export default function ChatWidget() {
         if (messagesEndRef.current) messagesEndRef.current.scrollIntoView({ behavior });
     }, []);
 
-    useEffect(() => { scrollToBottom(); }, [state.currentMessages, scrollToBottom]);
+    // Không scroll mỗi khi currentMessages thay đổi (polling sẽ kéo xuống mất xem tin cũ). Chỉ scroll khi đổi cuộc chat hoặc khi gửi/nhận tin (xử lý ở từng handler).
+    useEffect(() => {
+        if (selectedUser) setTimeout(() => scrollToBottom('smooth'), 200);
+    }, [selectedUser?.vnu_id, selectedUser?.student_code]);
 
     // ============================================
     // LOAD DATA ON DRAWER OPEN

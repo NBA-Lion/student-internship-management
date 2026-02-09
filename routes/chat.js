@@ -73,10 +73,12 @@ router.get("/conversations", authMiddleware, async (req, res) => {
 });
 
 // GET /api/chat/messages/:student_code
-// Khi other === "ADMIN": trả về tin nhắn giữa my và bất kỳ user role admin nào (để sinh viên thấy tin admin gửi dù admin có student_code khác "ADMIN")
+// - Khi other === "ADMIN": trả về tin nhắn giữa my và bất kỳ admin nào (sinh viên thấy tin admin gửi).
+// - Khi my là admin (role admin) xem chat với sinh viên (other): cũng lấy tin gửi tới "ADMIN" (vì SV gửi tới ADMIN), tránh "chỉ bên admin bị" mất tin.
 router.get("/messages/:student_code", authMiddleware, async (req, res) => {
   try {
     const my = req.user.student_code;
+    const myRole = (req.user.role || "").toLowerCase();
     const other = req.params.student_code;
 
     let messageFilter;
@@ -91,12 +93,22 @@ router.get("/messages/:student_code", authMiddleware, async (req, res) => {
         ]
       };
     } else {
+      // Cuộc hội thoại với một user cụ thể (other)
       messageFilter = {
         $or: [
           { sender: my, receiver: other },
           { sender: other, receiver: my }
         ]
       };
+      // Nếu người gọi là admin đang xem chat với sinh viên: SV có thể đã gửi tin tới "ADMIN" → cần lấy cả tin (sender: other, receiver: "ADMIN")
+      if (myRole === "admin") {
+        adminIds = await User.find({ role: "admin" }).distinct("student_code");
+        if (adminIds.length === 0) adminIds.push("ADMIN");
+        messageFilter.$or.push(
+          { sender: other, receiver: "ADMIN" },
+          { sender: "ADMIN", receiver: other }
+        );
+      }
     }
 
     const messages = await Message.find(messageFilter).sort({ createdAt: 1 });
@@ -107,7 +119,7 @@ router.get("/messages/:student_code", authMiddleware, async (req, res) => {
       : await User.findOne({ student_code: other }).select("student_code full_name");
 
     const formatted = messages.map((msg) => {
-      const isMine = msg.sender === my;
+      const isMine = msg.sender === my || (myRole === "admin" && (msg.sender === "ADMIN" || (adminIds && adminIds.includes(msg.sender))));
       const recalled = !!msg.deleted;
       return {
         _id: msg._id,
