@@ -585,7 +585,16 @@ export default function ChatWidget() {
         };
 
         const handleMessageDeleted = (data) => {
-            if (data.messageId) dispatch({ type: 'RECALL_MESSAGE', payload: { messageId: data.messageId } });
+            const id = data?.messageId ?? data;
+            if (id) dispatch({ type: 'RECALL_MESSAGE', payload: { messageId: String(id) } });
+        };
+        const handleMessageDeletedSocket = (deletedId) => {
+            if (deletedId) dispatch({ type: 'RECALL_MESSAGE', payload: { messageId: String(deletedId) } });
+            setRecallLoadingId(null);
+        };
+        const handleMessageDeletedError = (err) => {
+            message.error(err?.message || 'Không thể thu hồi tin nhắn');
+            setRecallLoadingId(null);
         };
 
         const handleMessageUpdated = (data) => {
@@ -603,6 +612,8 @@ export default function ChatWidget() {
         socket.on('ConversationDeleted', handleConversationDeleted);
         socket.on('MessagesRead', handleMessagesRead);
         socket.on('MessageDeleted', handleMessageDeleted);
+        socket.on('message_deleted', handleMessageDeletedSocket);
+        socket.on('message_deleted_error', handleMessageDeletedError);
         socket.on('MessageUpdated', handleMessageUpdated);
         socket.on('MessageReaction', handleMessageReaction);
 
@@ -613,6 +624,8 @@ export default function ChatWidget() {
             socket.off('ConversationDeleted', handleConversationDeleted);
             socket.off('MessagesRead', handleMessagesRead);
             socket.off('MessageDeleted', handleMessageDeleted);
+            socket.off('message_deleted', handleMessageDeletedSocket);
+            socket.off('message_deleted_error', handleMessageDeletedError);
             socket.off('MessageUpdated', handleMessageUpdated);
             socket.off('MessageReaction', handleMessageReaction);
         };
@@ -889,28 +902,39 @@ export default function ChatWidget() {
     const [recallLoadingId, setRecallLoadingId] = useState(null);
     const [editLoading, setEditLoading] = useState(false);
 
-    const handleRecallMessage = useCallback(async (messageId) => {
+    const handleRecallMessageFallback = useCallback(async (idStr) => {
+        if (!auth) {
+            message.error('Vui lòng đăng nhập lại');
+            return;
+        }
+        setRecallLoadingId(idStr);
+        try {
+            const url = `${API_BASE}/api/chat/message/${encodeURIComponent(idStr)}`;
+            const res = await fetch(url, { method: 'DELETE', headers: { 'Authorization': `Bearer ${auth}` } });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok && data.status === 'Success') {
+                dispatch({ type: 'RECALL_MESSAGE', payload: { messageId: idStr } });
+                setSelectedMessageId(null);
+            } else {
+                message.error(data.message || (res.status === 403 ? 'Chỉ người gửi mới thu hồi được' : res.status === 404 ? 'Không tìm thấy tin nhắn' : 'Không thể thu hồi'));
+            }
+        } catch (err) {
+            message.error('Lỗi kết nối. Kiểm tra mạng hoặc backend đang chạy.');
+        } finally {
+            setRecallLoadingId(null);
+        }
+    }, [auth]);
+
+    // Thu hồi: luôn gọi API (REST) để chắc chắn — server sẽ emit MessageDeleted cho cả hai bên
+    const handleRecallMessage = useCallback((messageId) => {
         const idStr = normMessageId(messageId);
         if (!idStr || idStr.startsWith('temp_') || idStr === '[object Object]') {
             message.warning('Vui lòng đợi tin nhắn được gửi xong');
             return;
         }
-        setRecallLoadingId(idStr);
-        try {
-            const res = await fetch(`${API_BASE}/api/chat/message/${idStr}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${auth}` } });
-            const data = await res.json();
-            if (data.status === 'Success') {
-                dispatch({ type: 'RECALL_MESSAGE', payload: { messageId: idStr } });
-                setSelectedMessageId(null);
-            } else {
-                message.error(data.message || 'Không thể thu hồi');
-            }
-        } catch (err) {
-            message.error('Lỗi kết nối');
-        } finally {
-            setRecallLoadingId(null);
-        }
-    }, [auth]);
+        setSelectedMessageId(null);
+        handleRecallMessageFallback(idStr);
+    }, [handleRecallMessageFallback]);
 
     const handleEditMessage = useCallback(async (messageId, newText) => {
         const idStr = String(messageId);

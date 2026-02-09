@@ -272,6 +272,47 @@ io.on("connection", async (socket) => {
   });
 
   // ============================================
+  // THU HỒI TIN NHẮN (delete_message → message_deleted)
+  // Chỉ người gửi được thu hồi; soft delete DB; emit cho cả hai bên
+  // ============================================
+  socket.on("delete_message", async (messageId) => {
+    try {
+      if (!messageId) {
+        socket.emit("message_deleted_error", { message: "Thiếu messageId" });
+        return;
+      }
+      const msg = await Message.findById(messageId);
+      if (!msg) {
+        socket.emit("message_deleted_error", { message: "Không tìm thấy tin nhắn" });
+        return;
+      }
+      if (msg.sender !== userId) {
+        socket.emit("message_deleted_error", { message: "Chỉ người gửi mới được thu hồi" });
+        return;
+      }
+      const deletedPayload = {
+        deleted: true,
+        deletedAt: new Date(),
+        deletedBy: userId,
+        message: "Tin nhắn đã bị thu hồi"
+      };
+      await Message.updateOne(
+        { _id: messageId },
+        { $set: deletedPayload }
+      );
+      const idStr = String(msg._id);
+      const senderId = msg.sender;
+      const receiverId = msg.receiver;
+      io.to(senderId).emit("message_deleted", idStr);
+      io.to(receiverId).emit("message_deleted", idStr);
+      console.log(">>> [Socket] Message recalled:", idStr, "by", userId);
+    } catch (e) {
+      console.error(">>> [Socket] delete_message error:", e.message);
+      socket.emit("message_deleted_error", { message: e.message || "Lỗi thu hồi tin nhắn" });
+    }
+  });
+
+  // ============================================
   // MARK MESSAGES AS READ
   // ============================================
   socket.on("MarkAsRead", async (data) => {

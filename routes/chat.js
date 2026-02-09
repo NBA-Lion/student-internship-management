@@ -273,7 +273,10 @@ router.delete("/message/:id", authMiddleware, async (req, res) => {
     const msg = await Message.findById(msgId);
     if (!msg) return res.status(404).json({ status: "Error", message: "Không tìm thấy tin nhắn" });
     if (msg.sender !== my) return res.status(403).json({ status: "Error", message: "Chỉ người gửi mới thu hồi được" });
-    await Message.updateOne({ _id: msgId }, { $set: { deleted: true, deletedAt: new Date(), deletedBy: my } });
+    await Message.updateOne(
+      { _id: msgId },
+      { $set: { deleted: true, deletedAt: new Date(), deletedBy: my, message: "Tin nhắn đã bị thu hồi" } }
+    );
     const partnerId = msg.receiver;
     const io = req.app.get("io");
     if (io) {

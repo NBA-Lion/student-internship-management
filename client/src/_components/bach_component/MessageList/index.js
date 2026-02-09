@@ -192,14 +192,20 @@ export default function MessageList(props) {
 
   useEffect(() => {
     if (!socketWrapper.socket || !partnerId) return;
-    const handleMessageDeleted = (data) => {
-      if (!data.messageId) return;
+    const applyRecall = (messageId) => {
+      if (!messageId) return;
       chatWrapper.setCurListMessage(prev => (prev || []).map(m =>
-        String(m._id) === String(data.messageId) ? { ...m, message: 'Tin nhắn đã được thu hồi', type: 'recalled', attachment_url: null } : m
+        String(m._id) === String(messageId) ? { ...m, message: 'Tin nhắn đã được thu hồi', type: 'recalled', attachment_url: null } : m
       ));
     };
+    const handleMessageDeleted = (data) => applyRecall(data?.messageId ?? data);
+    const handleMessageDeletedSocket = (deletedId) => applyRecall(deletedId);
     socketWrapper.socket.on('MessageDeleted', handleMessageDeleted);
-    return () => socketWrapper.socket.off('MessageDeleted', handleMessageDeleted);
+    socketWrapper.socket.on('message_deleted', handleMessageDeletedSocket);
+    return () => {
+      socketWrapper.socket.off('MessageDeleted', handleMessageDeleted);
+      socketWrapper.socket.off('message_deleted', handleMessageDeletedSocket);
+    };
   }, [partnerId, chatWrapper]);
 
   useEffect(() => {

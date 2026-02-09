@@ -165,18 +165,20 @@ function useSocketAction() {
         if (isActiveConversation) {
             const currentMessages = getRecoil(curListMessagesAtom) || [];
             
-            // 1) Nếu đã có message với cùng _id thì bỏ qua
-            const existsById = currentMessages.some(m => m._id === message._id);
+            // 1) Nếu đã có message với cùng _id thì bỏ qua (so sánh string tránh ObjectId vs string)
+            const existsById = currentMessages.some(m => String(m._id) === String(message._id));
 
-            // 2) Nếu có tin nhắn "optimistic" tương ứng (cùng nội dung, cùng người gửi/nhận)
+            // 2) Nếu có tin nhắn "optimistic" hoặc tin của mình cùng nội dung để thay bằng bản server
             let optimisticIndex = -1;
             if (!existsById) {
-                optimisticIndex = currentMessages.findIndex(m =>
-                    m._isOptimistic &&
-                    (m.message || m.content) === messageContent &&
-                    (m.sender === senderId || m.from?.vnu_id === senderId) &&
-                    (m.receiver === receiverId || m.to?.vnu_id === receiverId)
-                );
+                const contentStr = (messageContent || '').toString().trim();
+                optimisticIndex = currentMessages.findIndex(m => {
+                    const mc = (m.message || m.content || '').toString().trim();
+                    return (m._isOptimistic || (isFromMe && (m.sender === senderId || m.from?.vnu_id === senderId))) &&
+                        mc === contentStr &&
+                        (m.sender === senderId || m.from?.vnu_id === senderId) &&
+                        (m.receiver === receiverId || m.to?.vnu_id === receiverId);
+                });
             }
 
             let newMessages = [...currentMessages];
@@ -195,25 +197,26 @@ function useSocketAction() {
                 };
                 setRecoil(curListMessagesAtom, newMessages);
             } else {
-                // Fallback: có thể Recoil chưa kịp cập nhật optimistic — tìm tin cùng nội dung/sender/receiver để thay thế thay vì thêm mới
-                const fallbackIndex = currentMessages.findIndex(m =>
-                    m._isOptimistic &&
-                    (m.message || m.content) === messageContent &&
-                    (m.sender === senderId || m.from?.vnu_id === senderId) &&
-                    (m.receiver === receiverId || m.to?.vnu_id === receiverId)
-                );
+                // Fallback: tìm tin cùng nội dung/sender/receiver để thay thế (tránh double)
+                const contentStr = (messageContent || '').toString().trim();
+                const fallbackIndex = currentMessages.findIndex(m => {
+                    const mc = (m.message || m.content || '').toString().trim();
+                    return (m._isOptimistic || (isFromMe && (m.sender === senderId || m.from?.vnu_id === senderId))) &&
+                        mc === contentStr &&
+                        (m.sender === senderId || m.from?.vnu_id === senderId) &&
+                        (m.receiver === receiverId || m.to?.vnu_id === receiverId);
+                });
                 if (fallbackIndex >= 0) {
                     newMessages = currentMessages.map((m, i) => i === fallbackIndex ? { ...message, _isOptimistic: false } : m);
                     setRecoil(curListMessagesAtom, newMessages);
-                } else {
+                    console.log(">>> [Socket] Replaced message (fallback) for echo:", message._id);
+                } else if (!isFromMe && !isSelfSend) {
+                    // Chỉ ADD khi là tin từ người khác — tin của mình (echo) không add để tránh double
                     newMessages = [...currentMessages, message];
                     setRecoil(curListMessagesAtom, newMessages);
+                    console.log(">>> [Socket] Added message to active conversation:", { messageId: message._id });
                 }
-                console.log(">>> [Socket] Added message to active conversation:", {
-                    totalMessages: newMessages.length,
-                    messageId: message._id,
-                    replaced: fallbackIndex >= 0
-                });
+                // Nếu là echo (isFromMe) mà không tìm thấy để replace → bỏ qua, không add (ChatWidget/UI khác đã xử lý)
             }
         }
 
