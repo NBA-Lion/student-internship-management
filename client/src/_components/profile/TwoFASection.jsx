@@ -156,7 +156,9 @@ export function TwoFASection() {
                         disabled={loading}
                         onClick={handleOpenSetup}
                     >
-                        {loading ? 'Đang kiểm tra...' : (submitting && setupModal ? 'Đang tạo mã...' : 'Bật xác thực 2 bước')}
+                        {loading
+                            ? 'Đang kiểm tra...'
+                            : (submitting && setupModal ? 'Đang tạo mã...' : 'Bật xác thực 2 bước')}
                     </Button>
                 )}
             </Card>
