@@ -40,6 +40,9 @@ uploads/imports/*
 *.tmp
 *.temp
 
+# Practice / personal (không đẩy lên Git)
+client/src/_practice/
+
 # Coverage
 coverage/
 

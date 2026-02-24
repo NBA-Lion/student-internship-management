@@ -65,7 +65,8 @@ function useFetchWrapper() {
                 const isLoginRequest = typeof requestUrl === 'string' && (
                     requestUrl.includes('/api/auth/login') || requestUrl.includes('/auth/login')
                 );
-                if ([401, 403].includes(response.status) && !isLoginRequest) {
+                const is2FAVerifyLogin = typeof requestUrl === 'string' && requestUrl.includes('/api/auth/2fa/verify-login');
+                if ([401, 403].includes(response.status) && !isLoginRequest && !is2FAVerifyLogin) {
                     const from = encodeURIComponent(window.location.pathname + window.location.search || '');
                     setSessionExpired({ from });
                     return Promise.reject(new Error('SESSION_EXPIRED'));
