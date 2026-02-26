@@ -42,7 +42,7 @@ Tạo các user mẫu: ADMIN, SV001, SV002, SV003, SV004 và dữ liệu liên q
 
 Ngoài cách seed dữ liệu mẫu, project có kèm **bản dump MongoDB** trong thư mục:
 
-- `db-dump/intern_system_v2/` (xuất từ database `intern_system_v2` trên máy dev).
+- `db-dump/intern_system_v2/` (xuất từ database `intern_system_v2` trên máy).
 
 ### 1. Yêu cầu
 
