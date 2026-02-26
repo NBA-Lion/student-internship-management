@@ -25,12 +25,15 @@ function useUserActions () {
         resetUser: useResetRecoilState(userAtom)
     }
 
-    async function login({ username, password }) {
+    async function login({ username, password, captchaId, captchaAnswer, recaptchaToken }) {
         let response = { status: "", data: "" };
         try {
-            response = await authWrapper.login({ username, password });
+            response = await authWrapper.login({ username, password, captchaId, captchaAnswer, recaptchaToken });
 
             if (response.status === "Requires2FA") {
+                return response;
+            }
+            if (response.status === "RequireCaptcha") {
                 return response;
             }
             if (response.status !== "Success") {

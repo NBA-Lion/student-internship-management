@@ -1,7 +1,3 @@
-/**
- * Admin Analytics Dashboard – internship statistics with Recharts.
- * Summary cards + PieChart (status) + BarChart (major).
- */
 import React, { useEffect, useState } from 'react';
 import { useHistory } from 'react-router-dom';
 import { Card, Row, Col, Spin, Statistic, Breadcrumb } from 'antd';
@@ -22,6 +18,7 @@ import {
   YAxis,
   Tooltip,
   Legend,
+  LabelList,
 } from 'recharts';
 import { useFetchWrapper } from '_helpers';
 
@@ -38,6 +35,53 @@ const defaultChartColor = '#722ed1';
 
 function getStatusColor(name) {
   return STATUS_COLORS[name] || defaultChartColor;
+}
+
+// Map tên ngành gốc -> tên hiển thị trên biểu đồ.
+// ĐỔI các giá trị bên phải theo ý bạn (bên trái là dữ liệu trong DB).
+const MAJOR_LABEL_MAP = {
+  'Kỹ thuật phần mềm': 'Kỹ thuật phần mềm',
+  'Khoa học máy tính': 'Khoa học máy tính',
+  'Toán thông tin': 'Toán – Thông tin',
+  'Hệ thống thông tin': 'Hệ thống thông tin',
+  'Chưa cập nhật': 'Chưa cập nhật',
+};
+
+function mapMajorLabel(name) {
+  if (!name) return 'Khác';
+  return MAJOR_LABEL_MAP[name] || name;
+}
+
+// Custom tick cho trục X: tự xuống dòng nếu tên ngành quá dài
+function MajorXAxisTick(props) {
+  const { x, y, payload } = props;
+  const label = (payload && payload.value) ? String(payload.value) : '';
+  if (!label) return null;
+
+  // Cắt label thành 1–2 dòng cho dễ đọc
+  const words = label.split(' ');
+  const lines = [];
+  let current = '';
+  words.forEach((w) => {
+    const next = current ? `${current} ${w}` : w;
+    if (next.length > 14 && current) {
+      lines.push(current);
+      current = w;
+    } else {
+      current = next;
+    }
+  });
+  if (current) lines.push(current);
+
+  return (
+    <text x={x} y={y + 4} textAnchor="middle" fill="#555" fontSize={11}>
+      {lines.map((line, idx) => (
+        <tspan key={idx} x={x} dy={idx === 0 ? 0 : 12}>
+          {line}
+        </tspan>
+      ))}
+    </text>
+  );
 }
 
 export { AdminDashboard };
@@ -99,6 +143,10 @@ function AdminDashboard() {
   const statusDistribution = data?.statusDistribution || [];
   const periodDistribution = data?.periodDistribution || [];
   const majorDistribution = data?.majorDistribution || [];
+  const majorChartData = majorDistribution.map((item) => ({
+    ...item,
+    name: mapMajorLabel(item.name),
+  }));
 
   return (
     <div className="admin-dashboard" style={{ padding: 24, paddingTop: 24 }}>
@@ -180,14 +228,25 @@ function AdminDashboard() {
           <Card title="Sinh viên theo ngành (Major)" style={{ minHeight: 360 }}>
             <ResponsiveContainer width="100%" height={320}>
               <BarChart
-                data={majorDistribution}
-                margin={{ top: 8, right: 8, left: 8, bottom: 8 }}
+                data={majorChartData}
+                margin={{ top: 16, right: 16, left: 16, bottom: 32 }}
               >
-                <XAxis dataKey="name" tick={{ fontSize: 11 }} angle={-25} textAnchor="end" interval={0} />
+                <XAxis
+                  dataKey="name"
+                  tick={<MajorXAxisTick />}
+                  interval={0}
+                />
                 <YAxis allowDecimals={false} />
                 <Tooltip formatter={(value) => [value, 'Số sinh viên']} />
-                <Legend />
-                <Bar dataKey="value" name="Số sinh viên" fill="#1890ff" radius={[4, 4, 0, 0]} />
+                <Legend verticalAlign="bottom" align="center" wrapperStyle={{ fontSize: 12, marginTop: 8 }} />
+                <Bar
+                  dataKey="value"
+                  name="Số sinh viên thực tập"
+                  fill="#1890ff"
+                  radius={[4, 4, 0, 0]}
+                >
+                  <LabelList dataKey="value" position="top" />
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </Card>

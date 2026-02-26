@@ -4,6 +4,8 @@ const { Server } = require("socket.io");
 const cors = require("cors");
 const path = require("path");
 const fs = require("fs");
+const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
 
 const connectDB = require("./config/db");
 const User = require("./models/User");
@@ -49,6 +51,7 @@ const io = new Server(server, {
 
 app.set("io", io);
 
+app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({
   origin: corsOriginChecker,
   credentials: true,
@@ -56,6 +59,13 @@ app.use(cors({
   allowedHeaders: ["Content-Type", "Authorization"],
   optionsSuccessStatus: 204
 }));
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 80,
+  message: { status: "Error", message: "Quá nhiều thao tác, thử lại sau 15 phút." }
+});
+app.use("/api/auth", authLimiter);
+app.use("/auth", authLimiter);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 // Route rõ ràng cho file chat (PDF/ảnh): trả file hoặc 404 thân thiện (phải đặt trước static)

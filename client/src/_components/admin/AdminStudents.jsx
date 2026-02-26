@@ -757,9 +757,10 @@ function AdminStudents() {
                     />
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                    <Button type="primary" onClick={loadStudents}>Lọc</Button>
-                    <Button onClick={clearFilters}>Xóa bộ lọc</Button>
-                    <Button icon={<DownloadOutlined />} onClick={exportToCSV}>Xuất CSV</Button>
+                    {loading && <span style={{ color: '#1890ff', fontSize: 13 }}>Đang tải...</span>}
+                    <Button type="primary" onClick={loadStudents} loading={loading} disabled={loading}>Lọc</Button>
+                    <Button onClick={clearFilters} disabled={loading}>Xóa bộ lọc</Button>
+                    <Button icon={<DownloadOutlined />} onClick={exportToCSV} disabled={loading}>Xuất CSV</Button>
                 </div>
             </div>
 

@@ -61,8 +61,8 @@ async function authMiddleware(req, res, next) {
       });
     }
 
-    // Tìm user trong DB để đảm bảo user vẫn tồn tại
-    const user = await User.findOne({ student_code: decoded.student_code });
+    // Tìm user trong DB theo _id (không theo student_code) để khi admin đổi mã nhân viên vẫn nhận diện đúng
+    const user = await User.findById(decoded.id);
     
     if (!user) {
       return res.status(401).json({ 
@@ -71,7 +71,7 @@ async function authMiddleware(req, res, next) {
       });
     }
 
-    // Gắn user info vào request
+    // Gắn user info từ DB (student_code luôn đúng kể cả sau khi đổi mã)
     req.user = {
       id: user._id,
       student_code: user.student_code,

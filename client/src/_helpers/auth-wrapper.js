@@ -2,7 +2,6 @@ import { useEffect } from 'react';
 import { authAtom } from '_state';
 import { useRecoilState } from 'recoil';
 import { useFetchWrapper } from '_helpers';
-import { useProfileAction } from '_actions';
 import { alertBachAtom } from '_state';
 import { socketWrapper } from '_helpers/socket-wrapper';
 import { clearNotificationQueue } from '_actions/socket.action';
@@ -13,31 +12,29 @@ export { useAuthWrapper };
 function useAuthWrapper() {
     const [auth, setAuth] = useRecoilState(authAtom);
 
-    // Khi mount/reload: luôn lấy token từ sessionStorage của tab này → đúng role
     useEffect(() => {
         setAuth(getToken());
     }, []);
-    
-    // SỬA LỖI 1: Bỏ biến 'alert' thừa, chỉ lấy setAlert
-    // Dấu phẩy ở đầu nghĩa là bỏ qua phần tử đầu tiên của mảng
+
     const [, setAlert] = useRecoilState(alertBachAtom);
-    
     const fetchWrapper = useFetchWrapper();
-    // SỬA LỖI 2: Đã xóa dòng khai báo alertActions vì không dùng
-    const profileAction = useProfileAction();
 
     async function login(param) {
-        console.log(">>> [Auth] Đang đăng nhập với Backend mới...");
-
         const payload = param && (param.username !== undefined)
             ? { student_code: param.username, password: param.password }
             : param;
+        if (param && param.recaptchaToken) {
+            payload.recaptchaToken = param.recaptchaToken;
+        }
 
         let response;
         try {
             response = await fetchWrapper.post("/api/auth/login", "application/json", payload);
         } catch (e) {
             const msg = (e && e.message) || "";
+            if (e && e.requireCaptcha) {
+                return { status: "RequireCaptcha", data: msg };
+            }
             const isNetwork = /failed to fetch|network|connection|refused/i.test(msg);
             setAlert({
                 message: "Lỗi kết nối",
@@ -59,19 +56,14 @@ function useAuthWrapper() {
             return { status: "Error", data: "Phản hồi không hợp lệ" };
         }
 
-        // Bật 2FA: backend trả requires2FA + tempToken → không lưu token, báo client hiện bước nhập mã
         if (rawjson.requires2FA && rawjson.tempToken) {
             return { status: "Requires2FA", tempToken: rawjson.tempToken, message: rawjson.message };
         }
 
-        // Backend mới trả về { user, token }
         const { user, token } = rawjson || {};
 
         if (user && token) {
-            // 1. Lưu token (Recoil + sessionStorage theo tab)
             setLoginToken(token);
-
-            // 2. Chuẩn hóa dữ liệu user và lưu vào localStorage
             const userProfile = {
                 _id: user._id,
                 full_name: user.full_name,
@@ -100,7 +92,6 @@ function useAuthWrapper() {
             setUserData(userProfile);
             setAlert({ message: "Đăng nhập thành công", description: `Chào ${user.full_name || ""}` });
 
-            // Trả về format mà tầng trên đang dùng
             return { status: "Success", data: userProfile, token };
         } else {
             const message = rawjson?.message || "Sai thông tin đăng nhập";
@@ -109,33 +100,20 @@ function useAuthWrapper() {
         }
     }
 
-    // --- 2. HÀM ĐĂNG XUẤT ---
     async function logout() {
-        console.log(">>> [Auth] Đang đăng xuất...");
-        
-        // 1. Clear notification queue first
         clearNotificationQueue();
-        
-        // 2. Disconnect socket to prevent receiving messages for old user
         if (socketWrapper.socket) {
-            console.log(">>> [Auth] Disconnecting socket...");
             socketWrapper.socket.disconnect();
             socketWrapper.socket = null;
             socketWrapper.isConnected = false;
         }
-        
-        // 3. Clear token and storage (theo tab)
         setLoginToken("");
         clearAuth();
-
-        console.log(">>> [Auth] Đăng xuất hoàn tất.");
     }
 
-    // --- 3. LƯU TOKEN (theo tab: sessionStorage) ---
     function setLoginToken(token) {
         setAuth(token || "");
         setToken(token || "");
-        console.log(">>> [Auth] Token đã lưu (sessionStorage).");
     }
 
     async function loadUser() {
@@ -164,7 +142,6 @@ function useAuthWrapper() {
                 var name = cookiearray[i].split('=')[0].trim();
                 var value = cookiearray[i].split('=')[1];
                 
-                // SỬA LỖI 3: Thay == thành === (So sánh tuyệt đối)
                 if (name === 'token') token = value;
             }
             if(token) setLoginToken(token);
@@ -172,7 +149,6 @@ function useAuthWrapper() {
     }
     
 
-    /** Gửi mã TOTP sau bước login (khi backend trả requires2FA). Trả về cùng format như login. */
     async function verify2FALogin(tempToken, code) {
         if (!tempToken || !code) {
             setAlert({ message: "Lỗi", description: "Vui lòng nhập mã 6 số" });
@@ -225,7 +201,6 @@ function useAuthWrapper() {
         }
     }
 
-    /** Đăng nhập bằng token + user (sau khi đăng ký thành công), không gọi API login. */
     function loginWithToken(user, token) {
         if (!user || !token) return { status: "Error", data: "Thiếu user hoặc token" };
         setLoginToken(token);
@@ -258,7 +233,6 @@ function useAuthWrapper() {
         return { status: "Success", data: userProfile, token };
     }
 
-    // --- 6. QUÊN MẬT KHẨU ---
     async function forgetPassword(params) {
         try {
             const response = await fetchWrapper.post("/api/auth/forgot-password", "application/json", { email: params.email });

@@ -20,6 +20,9 @@ const UserSchema = new mongoose.Schema(
     dob: { type: Date, default: null },               // Optional - có thể bổ sung sau
     gender: { type: String, default: null },
 
+    // === MÃ NHÂN VIÊN HIỂN THỊ (admin/lecturer) - tách khỏi mã đăng nhập (student_code) ===
+    employee_code: { type: String, default: null },   // Chỉ để hiển thị; đăng nhập luôn dùng student_code hoặc email
+
     // === THÔNG TIN HỌC VẤN / GIẢNG VIÊN ===
     university: { type: String, default: "Trung tâm CNTT" },  // Default cho IT Center
     faculty: { type: String, default: null },         // Optional - Khoa

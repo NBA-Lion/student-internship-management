@@ -13,6 +13,7 @@ Hệ thống Quản lý Sinh viên Thực tập — hướng dẫn cài đặt, 
 | 3 | [03-cau-truc-api.md](./03-cau-truc-api.md) | Cấu trúc thư mục, API endpoints |
 | 4 | [04-troubleshooting.md](./04-troubleshooting.md) | Xử lý lỗi (local + deploy) |
 | 5 | [05-deploy.md](./05-deploy.md) | Deploy lên Render + Vercel |
+| 6 | [06-recaptcha.md](./06-recaptcha.md) | Cấu hình reCAPTCHA (key thật, từng bước) |
 | — | [checklist.md](./checklist.md) | Checklist đề bài |
 | — | [refactoring.md](./refactoring.md) | Tóm tắt refactoring |
 | — | [import/](./import/) | Hướng dẫn import (đợt, SV, mẫu CSV) |

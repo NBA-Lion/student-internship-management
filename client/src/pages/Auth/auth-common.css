@@ -200,6 +200,50 @@
   color: var(--auth-accent);
 }
 
+.auth-page .captcha-block {
+  margin-bottom: 20px;
+  padding: 16px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+}
+
+.auth-page .captcha-block .captcha-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+  margin-bottom: 4px;
+}
+
+.auth-page .captcha-block .captcha-title svg {
+  flex-shrink: 0;
+  color: var(--auth-accent);
+}
+
+.auth-page .captcha-block .captcha-hint {
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 12px;
+}
+
+.auth-page .captcha-block .captcha-error {
+  font-size: 12px;
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+}
+
+.auth-page .captcha-block .captcha-widget {
+  transform: scale(0.97);
+  transform-origin: 0 0;
+}
+
 .auth-page .error-msg {
   font-size: 12px;
   color: #ef4444;

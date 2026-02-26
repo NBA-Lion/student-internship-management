@@ -1,15 +1,21 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, Redirect, useLocation } from 'react-router-dom';
 import { useForm } from "react-hook-form";
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as Yup from 'yup';
 import { motion } from 'framer-motion';
+import ReCAPTCHA from 'react-google-recaptcha';
 
 import { useUserActions } from '_actions';
 import { authAtom } from '_state';
 import { useRecoilValue } from 'recoil';
 import { useAuthWrapper } from '_helpers';
 import './auth-common.css';
+
+// Test key của Google: widget luôn hiện, xác minh luôn pass (chỉ dùng dev/test). Production: set REACT_APP_RECAPTCHA_SITE_KEY.
+const RECAPTCHA_TEST_SITE_KEY = '6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI';
+const RECAPTCHA_SITE_KEY = process.env.REACT_APP_RECAPTCHA_SITE_KEY || RECAPTCHA_TEST_SITE_KEY;
+const USE_RECAPTCHA = true;
 
 export { Login };
 export default Login;
@@ -24,6 +30,11 @@ function Login(props) {
     const [tempToken, setTempToken] = useState(null);
     const [code2FA, setCode2FA] = useState('');
     const [submitting2FA, setSubmitting2FA] = useState(false);
+    const [requireCaptcha, setRequireCaptcha] = useState(false);
+    const [captchaError, setCaptchaError] = useState('');
+    const [recaptchaToken, setRecaptchaToken] = useState('');
+    const recaptchaRef = useRef(null);
+    const recaptchaTokenRef = useRef('');
     const search = new URLSearchParams(location.search || '');
     const isExpired = search.get('expired') === '1';
     const fromPath = search.get('from'); // Trang cần quay lại sau khi đăng nhập (vd: /admin/students)
@@ -121,10 +132,23 @@ function Login(props) {
                         </motion.div>
 
                         <form onSubmit={handleSubmit(async (data) => {
-                            const res = await userActions.login(data);
+                            setCaptchaError('');
+                            const payload = { username: data.username, password: data.password };
+                            if (requireCaptcha && USE_RECAPTCHA) {
+                                const tokenNow = recaptchaTokenRef.current || recaptchaRef.current?.getValue?.() || recaptchaToken;
+                                payload.recaptchaToken = tokenNow || '';
+                            }
+                            const res = await userActions.login(payload);
                             if (res && res.status === 'Requires2FA') {
                                 setTempToken(res.tempToken);
                                 setStep2FA(true);
+                            }
+                            if (res && res.status === 'RequireCaptcha') {
+                                setRequireCaptcha(true);
+                                setCaptchaError(res.data || 'Vui lòng hoàn thành xác minh bên dưới.');
+                                recaptchaTokenRef.current = '';
+                                setRecaptchaToken('');
+                                if (recaptchaRef.current) recaptchaRef.current.reset();
                             }
                         })}>
                             <motion.div 
@@ -186,6 +210,36 @@ function Login(props) {
                                 {errors.password && <span className="error-msg">{errors.password.message}</span>}
                             </motion.div>
 
+                            {requireCaptcha && (
+                                <motion.div className="form-group captcha-block" custom={2.5} variants={formItemVariants} initial="hidden" animate="visible">
+                                    <div className="captcha-title">
+                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                                            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                                        </svg>
+                                        Xác minh bảo mật
+                                    </div>
+                                    <p className="captcha-hint">Vui lòng tick ô &quot;I'm not a robot&quot; bên dưới rồi nhấn Đăng nhập.</p>
+                                    {captchaError && <div className="captcha-error">{captchaError}</div>}
+                                    {USE_RECAPTCHA ? (
+                                        <div className="captcha-widget">
+                                            <ReCAPTCHA
+                                                ref={recaptchaRef}
+                                                sitekey={RECAPTCHA_SITE_KEY}
+                                                onChange={(token) => {
+                                                    const t = token || '';
+                                                    recaptchaTokenRef.current = t;
+                                                    setRecaptchaToken(t);
+                                                }}
+                                                onExpired={() => { recaptchaTokenRef.current = ''; setRecaptchaToken(''); }}
+                                            />
+                                        </div>
+                                    ) : (
+                                        <p style={{ fontSize: 13, color: '#64748b' }}>Xác minh chưa được cấu hình. Vui lòng thử lại sau 15 phút hoặc liên hệ quản trị.</p>
+                                    )}
+                                </motion.div>
+                            )}
+
                             {step2FA ? (
                                 <>
                                     <motion.div className="form-group" custom={3} variants={formItemVariants} initial="hidden" animate="visible">
@@ -235,7 +289,7 @@ function Login(props) {
                             ) : (
                                 <motion.button 
                                     type="submit" 
-                                    disabled={isSubmitting} 
+                                    disabled={isSubmitting || (requireCaptcha && (!USE_RECAPTCHA || !recaptchaToken))} 
                                     className="submit-btn"
                                     tabIndex={0}
                                     custom={3}

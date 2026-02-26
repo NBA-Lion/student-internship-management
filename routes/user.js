@@ -69,11 +69,12 @@ router.get("/profile/me", authMiddleware, async (req, res) => {
       return res.status(404).json({ status: "Error", message: "Không tìm thấy người dùng" });
     }
 
-    // Map dữ liệu để frontend nhận đúng format
+    // Map dữ liệu để frontend nhận đúng format (vnu_id = mã hiển thị: employee_code hoặc student_code)
     const userData = {
       _id: user._id,
       student_code: user.student_code,
-      vnu_id: user.student_code, // Alias cho frontend cũ
+      employee_code: user.employee_code,
+      vnu_id: user.employee_code || user.student_code,
       name: user.full_name,
       full_name: user.full_name,
       email: user.email,
@@ -145,7 +146,8 @@ router.get("/profile/:id", authMiddleware, async (req, res) => {
     const userData = {
       _id: user._id,
       student_code: user.student_code,
-      vnu_id: user.student_code,
+      employee_code: user.employee_code,
+      vnu_id: user.employee_code || user.student_code,
       name: user.full_name,
       full_name: user.full_name,
       email: user.email,
@@ -221,10 +223,10 @@ router.post("/profile/:id", authMiddleware, async (req, res) => {
       "cv_url", "recommendation_letter_url"
     ];
 
-    // Admin có thể sửa thêm các trường quản lý
+    // Admin có thể sửa thêm các trường quản lý (employee_code = mã nhân viên hiển thị, không đổi student_code)
     const adminOnlyFields = [
       "role", "registration_status", "mentor_name", "mentor_feedback",
-      "final_grade", "admin_note", "status"
+      "final_grade", "admin_note", "status", "employee_code"
     ];
 
     const updateData = {};
@@ -285,25 +287,36 @@ router.post("/profile/:id", authMiddleware, async (req, res) => {
       updateData.password = await bcrypt.hash(body.new_password, 10);
     }
 
+    // Mã nhân viên hiển thị (employee_code): trim, cho phép rỗng
+    if (Object.prototype.hasOwnProperty.call(updateData, "employee_code")) {
+      updateData.employee_code = typeof updateData.employee_code === "string"
+        ? updateData.employee_code.trim() || null
+        : null;
+    }
+
     // Cập nhật vào DB
     await User.updateOne({ student_code: targetId }, { $set: updateData });
 
     // Lấy lại user sau khi update
-    const updatedUser = await User.findOne({ student_code: targetId }).select("-password");
+    const updatedUser = await User.findById(user._id).select("-password");
+    if (!updatedUser) {
+      return res.status(500).json({ status: "Error", message: "Lỗi khi lấy lại thông tin sau cập nhật" });
+    }
 
     await logActivity({
       type: "profile_update",
       title: `Sinh viên ${updatedUser.full_name || targetId} đã cập nhật thông tin hồ sơ.`,
       actor_name: updatedUser.full_name,
       actor_code: updatedUser.student_code,
-      user_id: req.user._id,
+      user_id: req.user.id || req.user._id,
     });
 
-    // Trả về full profile (giống GET) để frontend cập nhật ngay, tránh hiển thị dữ liệu cũ
+    // Trả về full profile (giống GET) để frontend cập nhật ngay
     const responseData = {
       _id: updatedUser._id,
       student_code: updatedUser.student_code,
-      vnu_id: updatedUser.student_code,
+      employee_code: updatedUser.employee_code,
+      vnu_id: updatedUser.employee_code || updatedUser.student_code,
       name: updatedUser.full_name,
       full_name: updatedUser.full_name,
       email: updatedUser.email,
@@ -638,7 +651,7 @@ router.put("/internship-registration", authMiddleware, async (req, res) => {
       title: `Sinh viên ${updatedUser.full_name} đã đăng ký thực tập.`,
       actor_name: updatedUser.full_name,
       actor_code: updatedUser.student_code,
-      user_id: req.user._id,
+      user_id: req.user.id || req.user._id,
     });
 
     // Emit notification qua Socket.IO (thông báo cho Admin)
@@ -801,7 +814,7 @@ router.put("/:id/evaluation", authMiddleware, async (req, res) => {
         : `Đã cập nhật đánh giá cho ${studentName}.`,
       actor_name: studentName,
       actor_code: updatedUser.student_code,
-      user_id: req.user._id,
+      user_id: req.user.id || req.user._id,
     });
 
     // Emit notification cho sinh viên

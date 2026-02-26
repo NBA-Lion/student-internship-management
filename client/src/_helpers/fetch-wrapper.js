@@ -41,7 +41,6 @@ function useFetchWrapper() {
     }
 
     function authHeader(url) {
-        // Recoil có thể chưa sync; fallback auth-storage (sessionStorage theo tab)
         const token = auth || (typeof window !== 'undefined' && getToken()) || '';
         const isLoggedIn = !!token;
         const isApiUrl = url.startsWith('/api') || url.startsWith('/admin') || url.startsWith('http');
@@ -72,14 +71,25 @@ function useFetchWrapper() {
                     return Promise.reject(new Error('SESSION_EXPIRED'));
                 }
                 if (isLoginRequest && response.status === 401) {
-                    return Promise.reject(new Error('Tài khoản hoặc mật khẩu không đúng'));
+                    const err = new Error((data && data.message) || 'Tài khoản hoặc mật khẩu không đúng');
+                    err.requireCaptcha = !!(data && data.requireCaptcha);
+                    return Promise.reject(err);
+                }
+                if (isLoginRequest && response.status === 400 && data && data.requireCaptcha) {
+                    const err = new Error((data && data.message) || 'Mã xác minh không đúng');
+                    err.requireCaptcha = true;
+                    return Promise.reject(err);
+                }
+                if (isLoginRequest && response.status === 503 && data && data.requireCaptcha) {
+                    const err = new Error((data && data.message) || 'Xác minh chưa được cấu hình.');
+                    err.requireCaptcha = true;
+                    return Promise.reject(err);
                 }
 
                 const errorMsg = (data && data.message) || response.statusText || "Lỗi kết nối";
                 return Promise.reject(new Error(errorMsg));
             }
 
-            // Trả về object giả lập Response với method json() trả data đã parse
             return {
                 ok: response.ok,
                 status: response.status,

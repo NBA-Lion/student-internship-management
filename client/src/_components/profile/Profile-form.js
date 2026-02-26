@@ -6,7 +6,7 @@ import {
     UserOutlined, UploadOutlined, FilePdfOutlined, FileWordOutlined,
     MailOutlined, PhoneOutlined, IdcardOutlined, CalendarOutlined,
     BankOutlined, BookOutlined, TeamOutlined, LockOutlined,
-    EditOutlined, CameraOutlined, SafetyCertificateOutlined
+    EditOutlined, SafetyCertificateOutlined
 } from '@ant-design/icons';
 import moment from 'moment';
 import { useEffect, useState, useMemo, useCallback } from 'react';
@@ -119,7 +119,11 @@ const getFormValuesFromData = (data, isAdmin) => {
         email: data.email,
         phone_number: data.phone_number || data.phone || undefined,
     };
-    if (isAdmin) return values;
+    if (isAdmin) {
+        values.student_code = data.student_code || '';
+        values.employee_code = data.employee_code != null ? data.employee_code : (data.vnu_id || '');
+        return values;
+    }
     return {
         ...values,
         student_code: data.student_code || data.vnu_id,
@@ -239,10 +243,11 @@ function ProfileForm(props) {
             let updateData = {};
             
             if (isAdmin) {
-                // Admin payload - only basic fields
+                // Admin payload - basic fields + mã nhân viên hiển thị (employee_code), không gửi student_code
                 updateData = {
                     name: values.name,
                     phone_number: values.phone_number,
+                    employee_code: values.employee_code != null ? String(values.employee_code).trim() : undefined,
                 };
                 
                 // Password fields (if changing)
@@ -295,9 +300,15 @@ function ProfileForm(props) {
             
             // Submit
             const userId = data?.student_code || data?.vnu_id || 'me';
-            await profileAction.handleSubmit(updateData, userId, isTable);
-            
+            const updated = await profileAction.handleSubmit(updateData, userId, isTable);
+            antdMessage.success('Đã cập nhật thông tin thành công');
             setPasswordSwitch(false);
+            // Cập nhật form + localData ngay từ response (tránh hiển thị lại giá trị cũ khi admin đổi mã nhân viên)
+            if (updated && isAdmin) {
+                const nextValues = getFormValuesFromData(updated, true);
+                form.setFieldsValue(nextValues);
+                setLocalData(prev => (prev ? { ...prev, ...updated } : updated));
+            }
         } catch (e) {
             console.error('Submit error:', e);
             let errMsg = 'Có lỗi xảy ra';
@@ -340,27 +351,6 @@ function ProfileForm(props) {
                                 icon={<UserOutlined />}
                                 style={avatarStyle}
                             />
-                            {/* Avatar Upload Button */}
-                            <Upload
-                                beforeUpload={(file) => handleFileUpload(file, 'avatar')}
-                                showUploadList={false}
-                                accept=".jpg,.jpeg,.png,.gif"
-                            >
-                                <Button 
-                                    type="primary" 
-                                    shape="circle" 
-                                    size="small"
-                                    icon={<CameraOutlined />}
-                                    loading={uploading.avatar}
-                                    style={{ 
-                                        position: 'absolute', 
-                                        bottom: 0, 
-                                        right: 0,
-                                        background: '#667eea',
-                                        border: 'none'
-                                    }}
-                                />
-                            </Upload>
                         </div>
                     </div>
                     
@@ -430,11 +420,21 @@ function ProfileForm(props) {
                                         </Form.Item>
                                     </Col>
                                     <Col xs={24} md={12}>
-                                        <Form.Item label="Mã nhân viên">
+                                        <Form.Item label="Mã đăng nhập">
                                             <Input 
                                                 prefix={<IdcardOutlined style={{ color: '#bfbfbf' }} />}
-                                                disabled
-                                                style={{ backgroundColor: '#f5f5f5' }}
+                                                readOnly
+                                                value={data?.student_code || ''}
+                                                style={{ backgroundColor: '#f5f5f5', cursor: 'default' }}
+                                            />
+                                        </Form.Item>
+                                        <Form.Item 
+                                            label="Mã nhân viên (hiển thị)" 
+                                            name="employee_code"
+                                        >
+                                            <Input 
+                                                prefix={<IdcardOutlined style={{ color: '#bfbfbf' }} />}
+                                                placeholder="VD: ADMIN-001 (chỉ để hiển thị, không đổi cách đăng nhập)"
                                             />
                                         </Form.Item>
                                     </Col>

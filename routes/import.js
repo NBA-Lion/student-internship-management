@@ -12,9 +12,6 @@ const { logActivity } = require("../services/activityService");
 
 const router = express.Router();
 
-// ============================================
-// FILE UPLOAD CONFIG FOR EXCEL FILES
-// ============================================
 const uploadDir = path.join(__dirname, "..", "uploads", "imports");
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
@@ -44,9 +41,6 @@ const upload = multer({
   fileFilter
 });
 
-// ============================================
-// HELPER: Parse Excel file to JSON
-// ============================================
 function parseExcelFile(filePath) {
   const workbook = XLSX.readFile(filePath);
   const sheetName = workbook.SheetNames[0];
@@ -196,9 +190,6 @@ function parseStatusByColumnIndex(filePathOrBuffer) {
   return { data, headerRowIndex: 0 };
 }
 
-// ============================================
-// PARSE THEO HEADER (hỗ trợ nhiều dòng tiêu đề, thứ tự cột bất kỳ)
-// ============================================
 /** Parse kết quả thực tập theo tên cột: tìm dòng header (Mã SV, MSSV, VNU-ID, ...), map từng dòng. */
 function parseGradesWithHeaderDetection(filePathOrBuffer) {
   const { data: rawRows } = parseExcelFileWithHeaderDetection(filePathOrBuffer);
@@ -247,10 +238,6 @@ function parseStatusWithHeaderDetection(filePathOrBuffer) {
   return { data: result, headerRowIndex: 0 };
 }
 
-// ============================================
-// TASK 1: SMART BACKEND COLUMN MAPPING (Flexible Headers)
-// Case-insensitive: accept any of these headers for the DB field
-// ============================================
 const SMART_ALIASES_USER = {
   student_code: ["MSSV", "Mã SV", "Mã sinh viên", "Student Code", "VNU-ID", "ID", "Mã GV", "Mã giảng viên"],
   full_name:     ["Họ và tên", "Họ tên", "Tên", "Full Name", "Name"],
@@ -283,10 +270,6 @@ const HEADER_MAPPINGS_LEGACY = {
   "Mã sinh viên": "student_code"
 };
 
-// ============================================
-// INTERNSHIP RESULTS IMPORT: Smart column mapping (Vietnamese/English)
-// Normalized keys (lowercase, no diacritics) for flexible header matching
-// ============================================
 const INTERNSHIP_RESULT_ALIASES = {
   student_code: [
     "mssv", "mã sinh viên", "mã sv", "student code", "student_id", "mã số sinh viên",
@@ -357,9 +340,6 @@ function mapRowToInternshipResult(rawRow) {
   };
 }
 
-// ============================================
-// STATUS IMPORT: Smart column mapping (Mã SV + Trạng thái)
-// ============================================
 const STATUS_IMPORT_ALIASES = {
   student_code: [
     "mssv", "mã sinh viên", "mã sv", "student code", "student_id", "mã số sinh viên",
@@ -506,9 +486,6 @@ function mapHeaders(row) {
   return mapped;
 }
 
-// ============================================
-// HELPER: Parse Vietnamese date formats
-// ============================================
 function parseDate(dateStr) {
   if (!dateStr) return null;
   
@@ -541,14 +518,8 @@ function parseDate(dateStr) {
   return isNaN(parsed.getTime()) ? null : parsed;
 }
 
-// ============================================
-// TASK 2: Auto-email domain (configurable)
-// ============================================
 const AUTO_EMAIL_DOMAIN = process.env.IMPORT_AUTO_EMAIL_DOMAIN || "student.intern.local";
 
-// ============================================
-// POST /api/import/users - Import Students or Lecturers
-// ============================================
 router.post("/users", authMiddleware, upload.single("file"), async (req, res) => {
   try {
     // Check admin permission
@@ -603,10 +574,6 @@ router.post("/users", authMiddleware, upload.single("file"), async (req, res) =>
           email = String(email).trim().toLowerCase();
         }
 
-        // ============================================
-        // SAFEGUARD: Determine role with strict validation
-        // NEVER allow 'admin' role from import
-        // ============================================
         let role = row.role || targetRole;
         
         // CRITICAL: Prevent creating admin accounts via import
@@ -732,9 +699,6 @@ router.post("/users", authMiddleware, upload.single("file"), async (req, res) =>
   }
 });
 
-// ============================================
-// POST /api/import/companies - Import Companies
-// ============================================
 router.post("/companies", authMiddleware, upload.single("file"), async (req, res) => {
   try {
     if (req.user.role !== "admin") {
@@ -850,9 +814,6 @@ router.post("/companies", authMiddleware, upload.single("file"), async (req, res
   }
 });
 
-// ============================================
-// POST /api/import/batches - Import Internship Batches
-// ============================================
 router.post("/batches", authMiddleware, upload.single("file"), async (req, res) => {
   try {
     if (req.user.role !== "admin") {
@@ -991,9 +952,6 @@ router.post("/batches", authMiddleware, upload.single("file"), async (req, res) 
   }
 });
 
-// ============================================
-// POST /api/import/grades - Import Internship Results/Grades (Smart mapping)
-// ============================================
 router.post("/grades", authMiddleware, upload.single("file"), async (req, res) => {
   try {
     if (req.user.role !== "admin") {
@@ -1133,9 +1091,6 @@ router.post("/grades", authMiddleware, upload.single("file"), async (req, res) =
   }
 });
 
-// ============================================
-// POST /api/import/status - Import Status Updates (Smart mapping, cùng logic với kết quả thực tập)
-// ============================================
 router.post("/status", authMiddleware, upload.single("file"), async (req, res) => {
   try {
     if (req.user.role !== "admin") {
