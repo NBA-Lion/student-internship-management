@@ -4,17 +4,23 @@ Hệ thống quản lý thực tập với các tính năng: quản lý sinh vi�
 
 ---
 
-## Quick Start
+## Quick Start (local)
 
 ```bash
+# 1. Cài dependency
 npm install
 cd client && npm install && cd ..
+
+# 2. (Tuỳ chọn) Seed dữ liệu mẫu
 npm run seed
-npm start          # Terminal 1: Backend
-cd client && npm start   # Terminal 2: Frontend
+
+# 3. Chạy backend + frontend (2 terminal)
+npm start                 # Terminal 1: Backend (http://localhost:5000)
+cd client && npm start    # Terminal 2: Frontend (http://localhost:3000)
 ```
 
-**Đăng nhập:** ADMIN / 123
+- **Tài khoản mẫu:** xem chi tiết trong `docs/02-chay-ung-dung.md`.
+- Có thể dùng **db-dump** thật trong `db-dump/intern_system_v2/` thay cho seed (xem mục “Khôi phục dữ liệu MongoDB” trong docs).
 
 ---
 
@@ -30,6 +36,7 @@ Toàn bộ hướng dẫn nằm trong thư mục **[docs/](./docs/)**:
 | [docs/03-cau-truc-api.md](./docs/03-cau-truc-api.md) | Cấu trúc, API |
 | [docs/04-troubleshooting.md](./docs/04-troubleshooting.md) | Xử lý lỗi |
 | [docs/05-deploy.md](./docs/05-deploy.md) | Deploy Vercel + Render |
+| [docs/06-recaptcha.md](./docs/06-recaptcha.md) | Cấu hình Google reCAPTCHA v2 |
 
 ---
 
