@@ -1,4 +1,4 @@
-# ![Uploading image.png…]()
+
  Checklist theo đề bài – Website Quản lý Sinh viên Thực tập
 
 ## I. CHỨC NĂNG DÀNH CHO SINH VIÊN
