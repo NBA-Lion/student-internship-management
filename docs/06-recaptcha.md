@@ -61,6 +61,10 @@ RECAPTCHA_SECRET_KEY=YOUR_SECRET_KEY
 
 4. Lưu file. **Restart** server backend (`npm start` ở thư mục gốc).
 
+> **Trong source gửi đi:**  
+> - Các file `.env` đã được để placeholder dạng `ENTER_RECAPTCHA_SITE_KEY_HERE`, `ENTER_RECAPTCHA_SECRET_KEY_HERE`.  
+> - Khi triển khai thực tế, người cài đặt cần mở `.env` và `client/.env` rồi **thay các giá trị `ENTER_...` này bằng key thật** lấy từ reCAPTCHA Admin theo hướng dẫn ở trên.
+
 ---
 
 ## Bước 5: Kiểm tra

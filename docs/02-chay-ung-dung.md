@@ -36,6 +36,42 @@ npm run seed
 
 Tạo các user mẫu: ADMIN, SV001, SV002, SV003, SV004 và dữ liệu liên quan.
 
+---
+
+## Khôi phục dữ liệu MongoDB từ `db-dump` (dùng khi chấm/bàn giao)
+
+Ngoài cách seed dữ liệu mẫu, project có kèm **bản dump MongoDB** trong thư mục:
+
+- `db-dump/intern_system_v2/` (xuất từ database `intern_system_v2` trên máy dev).
+
+### 1. Yêu cầu
+
+- Đã cài **MongoDB** và **MongoDB Database Tools** (có `mongorestore.exe`).
+- Biết đường dẫn tới thư mục chứa tools, ví dụ:
+  - `C:\Program Files\MongoDB\Tools\100.14\bin`
+
+### 2. Lệnh khôi phục (PowerShell)
+
+```powershell
+cd "C:\Program Files\MongoDB\Tools\100.14\bin"   # thư mục có mongorestore.exe
+
+mongorestore `
+  --db intern_system_v2 `
+  --drop `
+  "E:\Code\React\Test\db-dump\intern_system_v2"
+```
+
+Trong đó:
+
+- `--db intern_system_v2`: tên database (trùng với cấu hình trong `config/db.js`).
+- `--drop`: xóa dữ liệu cũ (nếu có) trước khi restore.
+- Đường dẫn cuối cùng (`E:\Code\React\Test\...`) cần chỉnh lại cho đúng vị trí project trên máy của bạn.
+
+Sau khi restore xong:
+
+- Chạy backend + frontend như ở phần trên.
+- **Không bắt buộc chạy lại `npm run seed`** nếu đã restore dữ liệu thật từ `db-dump`.
+
 ## Tài khoản mặc định
 
 | Username | Password | Vai trò |
