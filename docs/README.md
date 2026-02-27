@@ -30,4 +30,6 @@ npm start          # Terminal 1
 cd client && npm start   # Terminal 2
 ```
 
-Đăng nhập: **ADMIN** / **123**
+Đăng nhập :
+Phần Admin: **ADMIN** / **123**
+Phần User : **SV001** / **123456**
