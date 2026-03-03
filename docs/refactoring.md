@@ -14,11 +14,11 @@
 - Gây vỡ layout và trải nghiệm người dùng kém
 
 **Giải pháp đã triển khai:**
-- ✅ Thay thế loading state bằng Circular Spinner nhỏ gọn với icon `LoadingOutlined`
-- ✅ Sử dụng `loadingContainer` với flexbox để căn giữa spinner
-- ✅ Thêm transition mượt mà (0.3s) khi minimize/expand chat window
-- ✅ Sử dụng `flexShrink: 0` và `minHeight: 0` để ngăn left pane bị đẩy ra ngoài
-- ✅ Thay đổi chiều cao động (`chatWindowMinimized` / `chatWindowExpanded`) thay vì dùng inline style
+-  Thay thế loading state bằng Circular Spinner nhỏ gọn với icon `LoadingOutlined`
+-  Sử dụng `loadingContainer` với flexbox để căn giữa spinner
+-  Thêm transition mượt mà (0.3s) khi minimize/expand chat window
+-  Sử dụng `flexShrink: 0` và `minHeight: 0` để ngăn left pane bị đẩy ra ngoài
+-  Thay đổi chiều cao động (`chatWindowMinimized` / `chatWindowExpanded`) thay vì dùng inline style
 
 **Files đã thay đổi:**
 - `client/src/_components/chat/ChatWidget.jsx`
@@ -34,25 +34,25 @@
 **Giải pháp đã triển khai:**
 
 #### Backend:
-- ✅ Cài đặt **Multer** middleware để xử lý multipart/form-data
-- ✅ Tạo folder `uploads/documents/` để lưu files
-- ✅ Thêm 3 API endpoints mới:
+-  Cài đặt **Multer** middleware để xử lý multipart/form-data
+-  Tạo folder `uploads/documents/` để lưu files
+-  Thêm 3 API endpoints mới:
   - `POST /api/user/upload/cv` - Upload CV
   - `POST /api/user/upload/recommendation` - Upload thư giới thiệu
   - `POST /api/user/upload/avatar` - Upload ảnh đại diện
-- ✅ Validate file types: PDF, DOC, DOCX, JPG, PNG (max 5MB)
-- ✅ Tự động cập nhật URL vào database sau khi upload thành công
+-  Validate file types: PDF, DOC, DOCX, JPG, PNG (max 5MB)
+-  Tự động cập nhật URL vào database sau khi upload thành công
 
 #### Database Model:
-- ✅ Thêm field `avatar_url` vào User schema
-- ✅ Đã có sẵn `cv_url` và `recommendation_letter_url`
+-  Thêm field `avatar_url` vào User schema
+-  Đã có sẵn `cv_url` và `recommendation_letter_url`
 
 #### Frontend:
-- ✅ Sử dụng Ant Design `Upload` component với `beforeUpload` custom handler
-- ✅ Hiển thị loading state cho từng loại upload riêng biệt
-- ✅ Hiển thị link preview khi đã upload thành công
-- ✅ Chỉ hiển thị form upload cho sinh viên (role === 'student')
-- ✅ Admin chỉ có thể xem và tải file về
+-  Sử dụng Ant Design `Upload` component với `beforeUpload` custom handler
+-  Hiển thị loading state cho từng loại upload riêng biệt
+-  Hiển thị link preview khi đã upload thành công
+-  Chỉ hiển thị form upload cho sinh viên (role === 'student')
+-  Admin chỉ có thể xem và tải file về
 
 **Files đã thay đổi:**
 - `models/User.js` - Thêm field avatar_url
@@ -72,10 +72,10 @@
 - Backend thiếu Multer middleware
 
 **Giải pháp:**
-- ✅ Đã được fix hoàn toàn thông qua Task 2 (Multer đã được cấu hình đúng)
-- ✅ Frontend sử dụng FormData để gửi file
-- ✅ Server lưu file với tên an toàn (timestamp + sanitized filename)
-- ✅ Return URL công khai để frontend hiển thị
+-  Đã được fix hoàn toàn thông qua Task 2 (Multer đã được cấu hình đúng)
+- `Frontend sử dụng FormData để gửi file
+-  Server lưu file với tên an toàn (timestamp + sanitized filename)
+-  Return URL công khai để frontend hiển thị
 
 ---
 
@@ -88,25 +88,25 @@
 **Giải pháp đã triển khai:**
 
 #### Backend:
-- ✅ Tạo helper function `convertToCSV()` với UTF-8 BOM (`\uFEFF`)
-- ✅ Tạo endpoint `GET /api/admin/export/csv`
-- ✅ Hỗ trợ query parameters để filter (status, major, university)
-- ✅ Xuất 18 cột thông tin:
+-  Tạo helper function `convertToCSV()` với UTF-8 BOM (`\uFEFF`)
+-  Tạo endpoint `GET /api/admin/export/csv`
+-  Hỗ trợ query parameters để filter (status, major, university)
+-  Xuất 18 cột thông tin:
   ```
   MSSV, Họ và tên, Email, Số điện thoại, Trường, Khoa, Ngành, Lớp,
   Đơn vị thực tập, Đề tài, Ngày bắt đầu, Ngày kết thúc, Trạng thái,
   Người hướng dẫn, Nhận xét, Điểm báo cáo, Điểm tổng kết, Kết quả
   ```
-- ✅ Format ngày sang định dạng Việt Nam (DD/MM/YYYY)
-- ✅ Escape đặc biệt cho CSV (quotes, commas)
-- ✅ Set Content-Type và Content-Disposition headers đúng
+-  Format ngày sang định dạng Việt Nam (DD/MM/YYYY)
+-  Escape đặc biệt cho CSV (quotes, commas)
+-  Set Content-Type và Content-Disposition headers đúng
 
 #### Frontend:
-- ✅ Thêm button "Xuất CSV" với icon `DownloadOutlined`
-- ✅ Sử dụng Fetch API để download blob
-- ✅ Tự động trigger download file qua thẻ `<a>`
-- ✅ Hiển thị loading message khi đang xuất
-- ✅ Filename tự động: `Danh_sach_sinh_vien_<timestamp>.csv`
+-  Thêm button "Xuất CSV" với icon `DownloadOutlined`
+-  Sử dụng Fetch API để download blob
+-  Tự động trigger download file qua thẻ `<a>`
+-  Hiển thị loading message khi đang xuất
+- `Filename tự động: `Danh_sach_sinh_vien_<timestamp>.csv`
 
 **Files đã thay đổi:**
 - `routes/admin.js` - Thêm convertToCSV helper và /export/csv endpoint
@@ -123,30 +123,30 @@
 **Giải pháp đã triển khai:**
 
 #### CSS Enhancements:
-- ✅ **Background chính:**
+-  **Background chính:**
   - Gradient xanh dương chuyên nghiệp (Navy Blue → Royal Blue)
   - Thêm SVG grid pattern tinh tế (opacity 0.05)
   - Multiple radial gradients tạo chiều sâu
   - Animation "subtleMove" 20s cho hiệu ứng sống động nhẹ nhàng
 
-- ✅ **Auth Info Panel (bên trái):**
+-  **Auth Info Panel (bên trái):**
   - Backdrop filter với blur 12px và saturate 180%
   - Thêm shimmer animation 15s
   - Badge "TRUNG TÂM HỖ TRỢ THỰC TẬP" với background glass
   - Text shadow cho heading
   - Custom checkmark bullets với circular background
 
-- ✅ **Auth Card (bên phải):**
+-  **Auth Card (bên phải):**
   - Box shadow nhiều lớp cho depth
   - Hover effect: translateY(-2px) với shadow tăng
   - Heading có underline gradient (xanh dương)
   - Form inputs với focus state rõ ràng
 
 #### Content Updates:
-- ✅ Thêm icon 🎓 cho badge
-- ✅ Heading 2 dòng với line-height tối ưu
-- ✅ Mô tả đầy đủ hơn về hệ thống
-- ✅ 4 bullet points nổi bật các tính năng chính:
+-  Thêm icon 🎓 cho badge
+-  Heading 2 dòng với line-height tối ưu
+-  Mô tả đầy đủ hơn về hệ thống
+-  4 bullet points nổi bật các tính năng chính:
   - Đăng ký thực tập nhanh chóng
   - Theo dõi trạng thái real-time
   - Tra cứu kết quả đánh giá
@@ -266,25 +266,25 @@ Frontend sẽ chạy trên: **http://localhost:3000**
 
 ## 🐛 Đã Fix
 
-1. ✅ Chat widget không bị vỡ layout khi loading/minimize
-2. ✅ Upload CV và Thư giới thiệu hoạt động bình thường
-3. ✅ Ảnh đại diện có thể upload và preview
-4. ✅ CSV export hiển thị đúng tiếng Việt trong Excel
-5. ✅ Background trang login chuyên nghiệp, không còn đơn điệu
+1.  Chat widget không bị vỡ layout khi loading/minimize
+2.  Upload CV và Thư giới thiệu hoạt động bình thường
+3.  Ảnh đại diện có thể upload và preview
+4.  CSV export hiển thị đúng tiếng Việt trong Excel
+5.  Background trang login chuyên nghiệp, không còn đơn điệu
 
 ---
 
 ## 📝 Ghi Chú Bổ Sung
 
 ### Compatibility:
-- ✅ Hoàn toàn tương thích với code cũ (backward compatible)
-- ✅ Hỗ trợ cả field names cũ và mới (ví dụ: `department` ↔ `internship_unit`)
-- ✅ API fallback cho các endpoint cũ
+- Hoàn toàn tương thích với code cũ (backward compatible)
+- Hỗ trợ cả field names cũ và mới (ví dụ: `department` ↔ `internship_unit`)
+- API fallback cho các endpoint cũ
 
 ### Performance:
-- ✅ File upload sử dụng multipart streaming (không load toàn bộ vào RAM)
-- ✅ CSV generation sử dụng string concatenation (nhanh cho datasets < 10k rows)
-- ✅ Chat animations sử dụng CSS transitions (GPU accelerated)
+-  File upload sử dụng multipart streaming (không load toàn bộ vào RAM)
+-  CSV generation sử dụng string concatenation (nhanh cho datasets < 10k rows)
+-  Chat animations sử dụng CSS transitions (GPU accelerated)
 
 ### Future Improvements (Đề xuất):
 - [ ] Thêm image compression trước khi upload
