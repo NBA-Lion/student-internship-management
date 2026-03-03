@@ -205,7 +205,7 @@ router.post("/profile/:id", authMiddleware, async (req, res) => {
     // Xác định student_code cần update
     const targetId = id === "me" ? requesterId : id;
 
-    // Chỉ admin hoặc chính user đó mới được sửa
+    // Chỉ admin (Nhà trường) hoặc chính user đó mới được sửa
     if (requesterRole !== "admin" && requesterId !== targetId) {
       return res.status(403).json({ status: "Error", message: "Không có quyền chỉnh sửa" });
     }
@@ -252,7 +252,7 @@ router.post("/profile/:id", authMiddleware, async (req, res) => {
       const isAdminOnly = adminOnlyFields.includes(frontendField);
 
       if (!isAllowedForUser && !isAdminOnly) continue; // Bỏ qua field không hợp lệ
-      if (isAdminOnly && requesterRole !== "admin") continue; // User thường không sửa được field admin
+      if (isAdminOnly && requesterRole !== "admin") continue; // Chỉ Admin (Nhà trường) mới sửa được field quản lý
 
       // Map sang tên field trong DB
       const dbField = fieldMapping[frontendField] || frontendField;
@@ -382,7 +382,7 @@ router.put("/:id/status", authMiddleware, async (req, res) => {
     const { status, admin_note } = req.body;
     const requesterRole = req.user.role;
 
-    // Chỉ admin mới được thay đổi status
+    // Chỉ admin (Nhà trường) mới được thay đổi status
     if (requesterRole !== "admin") {
       return res.status(403).json({ status: "Error", message: "Chỉ Admin mới có quyền thay đổi trạng thái" });
     }
@@ -689,28 +689,34 @@ router.put("/internship-registration", authMiddleware, async (req, res) => {
 });
 
 // ============================================
-// PUT /api/user/:id/evaluation - Admin đánh giá sinh viên
+// PUT /api/user/:id/evaluation - CHỈ Mentor (người hướng dẫn) mới được đánh giá sinh viên được gán cho mình
 // ============================================
 router.put("/:id/evaluation", authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
     const requesterRole = req.user.role;
+    const requesterId = req.user.id || req.user._id;
 
-    // SECURITY: Chỉ Admin mới được đánh giá
-    if (requesterRole !== "admin") {
+    // CHỈ Mentor mới được nhập nhận xét, chấm điểm, xác nhận kết thúc
+    if (requesterRole !== "mentor") {
       return res.status(403).json({ 
         status: "Error", 
-        message: "Chỉ Admin/Giáo vụ mới có quyền đánh giá sinh viên" 
+        message: "Chỉ Mentor (người hướng dẫn) mới có quyền đánh giá sinh viên" 
       });
     }
 
-    // Tìm user bằng student_code hoặc _id
     let user = await User.findOne({ student_code: id });
-    if (!user) {
-      user = await User.findById(id);
-    }
+    if (!user) user = await User.findById(id);
     if (!user) {
       return res.status(404).json({ status: "Error", message: "Không tìm thấy sinh viên" });
+    }
+
+    // Sinh viên phải được HR gán cho chính mentor này
+    if (!user.mentor_id || String(user.mentor_id) !== String(requesterId)) {
+      return res.status(403).json({ 
+        status: "Error", 
+        message: "Bạn chỉ được đánh giá sinh viên được gán cho bạn" 
+      });
     }
 
     const { 
@@ -718,84 +724,92 @@ router.put("/:id/evaluation", authMiddleware, async (req, res) => {
       report_score,       // Điểm báo cáo (0-10)
       final_grade,        // Điểm tổng kết (0-10) - tính tự động hoặc nhập tay
       final_status,       // Trạng thái: "Đạt" / "Không đạt"
-      admin_note,         // Ghi chú từ Admin (optional)
-      internship_status,  // Trạng thái thực tập: Chờ duyệt, Đang thực tập, Đã hoàn thành, Từ chối
-      period_id           // Đợt thực tập (ObjectId)
+      admin_note,         // Ghi chú từ Admin (chỉ Admin, Mentor không được gửi)
+      internship_status,  // Trạng thái thực tập (chỉ Admin)
+      period_id           // Đợt thực tập (chỉ Admin)
     } = req.body;
 
     const updateData = {};
 
-    // Mentor feedback
-    if (mentor_feedback !== undefined) {
-      updateData.mentor_feedback = mentor_feedback;
-    }
-
-    // Report score (validate 0-10)
-    if (report_score !== undefined) {
-      const score = Number(report_score);
-      if (isNaN(score) || score < 0 || score > 10) {
-        return res.status(400).json({ status: "Error", message: "Điểm báo cáo phải từ 0-10" });
-      }
-      updateData.report_score = score;
-    }
-
-    // Final grade (validate 0-10)
-    if (final_grade !== undefined) {
-      const grade = Number(final_grade);
-      if (isNaN(grade) || grade < 0 || grade > 10) {
-        return res.status(400).json({ status: "Error", message: "Điểm tổng kết phải từ 0-10" });
-      }
-      updateData.final_grade = grade;
-    }
-
-    // Final status
-    if (final_status !== undefined) {
-      const validStatuses = ["Đạt", "Không đạt", "Pending"];
-      if (!validStatuses.includes(final_status)) {
-        return res.status(400).json({ 
-          status: "Error", 
-          message: `Trạng thái không hợp lệ. Chọn: ${validStatuses.join(", ")}` 
-        });
-      }
-      updateData.final_status = final_status;
-
-      // CRITICAL: Nếu "Đạt", set internship_status = "Đã hoàn thành"
-      if (final_status === "Đạt") {
-        updateData.internship_status = "Đã hoàn thành";
-        updateData.registration_status = "Đã hoàn thành";
-      }
-    }
-
-    // Admin note
-    if (admin_note !== undefined) {
-      updateData.admin_note = admin_note;
-    }
-
-    // Trạng thái thực tập (Chờ duyệt, Đang thực tập, Đã hoàn thành, Từ chối)
-    if (internship_status !== undefined) {
-      const valid = ["Chờ duyệt", "Đang thực tập", "Đã hoàn thành", "Từ chối"];
-      if (valid.includes(internship_status)) {
-        updateData.internship_status = internship_status;
-        updateData.registration_status = internship_status;
-      }
-    }
-
-    // Đợt thực tập: period_id có thể là ObjectId (từ bảng InternshipPeriod) hoặc tên đợt (string)
-    if (period_id !== undefined) {
-      if (period_id && String(period_id).trim()) {
-        const isObjectId = mongoose.Types.ObjectId.isValid(period_id) && String(new mongoose.Types.ObjectId(period_id)) === String(period_id);
-        const period = isObjectId ? await InternshipPeriod.findById(period_id).select("name code") : null;
-        if (period) {
-          updateData.internship_period_id = period._id;
-          updateData.internship_period = period.name || period.code || String(period._id);
-        } else {
-          // Không tìm thấy đợt theo ID hoặc gửi lên là tên đợt → lưu dạng chuỗi
-          updateData.internship_period_id = null;
-          updateData.internship_period = String(period_id).trim();
+    // Mentor CHỈ được gửi: nhận xét, điểm, Đạt/Không đạt (không được sửa admin_note, period, internship_status tùy ý)
+    if (requesterRole === "mentor") {
+      if (mentor_feedback !== undefined) updateData.mentor_feedback = mentor_feedback;
+      if (report_score !== undefined) {
+        const score = Number(report_score);
+        if (isNaN(score) || score < 0 || score > 10) {
+          return res.status(400).json({ status: "Error", message: "Điểm báo cáo phải từ 0-10" });
         }
-      } else {
-        updateData.internship_period_id = null;
-        updateData.internship_period = null;
+        updateData.report_score = score;
+      }
+      if (final_grade !== undefined) {
+        const grade = Number(final_grade);
+        if (isNaN(grade) || grade < 0 || grade > 10) {
+          return res.status(400).json({ status: "Error", message: "Điểm tổng kết phải từ 0-10" });
+        }
+        updateData.final_grade = grade;
+      }
+      if (final_status !== undefined) {
+        const validStatuses = ["Đạt", "Không đạt", "Pending"];
+        if (!validStatuses.includes(final_status)) {
+          return res.status(400).json({ status: "Error", message: `Trạng thái không hợp lệ. Chọn: ${validStatuses.join(", ")}` });
+        }
+        updateData.final_status = final_status;
+        if (final_status === "Đạt") {
+          updateData.internship_status = "Đã hoàn thành";
+          updateData.registration_status = "Đã hoàn thành";
+        }
+      }
+    } else {
+      // Dành cho role khác (nếu sau này mở rộng) – giữ logic cũ
+      if (mentor_feedback !== undefined) updateData.mentor_feedback = mentor_feedback;
+      if (report_score !== undefined) {
+        const score = Number(report_score);
+        if (isNaN(score) || score < 0 || score > 10) {
+          return res.status(400).json({ status: "Error", message: "Điểm báo cáo phải từ 0-10" });
+        }
+        updateData.report_score = score;
+      }
+      if (final_grade !== undefined) {
+        const grade = Number(final_grade);
+        if (isNaN(grade) || grade < 0 || grade > 10) {
+          return res.status(400).json({ status: "Error", message: "Điểm tổng kết phải từ 0-10" });
+        }
+        updateData.final_grade = grade;
+      }
+      if (final_status !== undefined) {
+        const validStatuses = ["Đạt", "Không đạt", "Pending"];
+        if (!validStatuses.includes(final_status)) {
+          return res.status(400).json({ status: "Error", message: `Trạng thái không hợp lệ. Chọn: ${validStatuses.join(", ")}` });
+        }
+        updateData.final_status = final_status;
+        if (final_status === "Đạt") {
+          updateData.internship_status = "Đã hoàn thành";
+          updateData.registration_status = "Đã hoàn thành";
+        }
+      }
+      if (admin_note !== undefined) updateData.admin_note = admin_note;
+      if (internship_status !== undefined) {
+        const valid = ["Chờ duyệt", "Đang thực tập", "Đã hoàn thành", "Từ chối"];
+        if (valid.includes(internship_status)) {
+          updateData.internship_status = internship_status;
+          updateData.registration_status = internship_status;
+        }
+      }
+      if (period_id !== undefined) {
+        if (period_id && String(period_id).trim()) {
+          const isObjectId = mongoose.Types.ObjectId.isValid(period_id) && String(new mongoose.Types.ObjectId(period_id)) === String(period_id);
+          const period = isObjectId ? await InternshipPeriod.findById(period_id).select("name code") : null;
+          if (period) {
+            updateData.internship_period_id = period._id;
+            updateData.internship_period = period.name || period.code || String(period._id);
+          } else {
+            updateData.internship_period_id = null;
+            updateData.internship_period = String(period_id).trim();
+          }
+        } else {
+          updateData.internship_period_id = null;
+          updateData.internship_period = null;
+        }
       }
     }
 
@@ -856,6 +870,7 @@ router.put("/:id/evaluation", authMiddleware, async (req, res) => {
 // ============================================
 router.get("/all", authMiddleware, async (req, res) => {
   try {
+    // Admin (Nhà trường) mới được xem danh sách users
     if (req.user.role !== "admin") {
       return res.status(403).json({ status: "Error", message: "Không có quyền truy cập" });
     }

@@ -30,15 +30,19 @@
 
 ---
 
-## II. CHỨC NĂNG DÀNH CHO ADMIN
+## II. BA VAI TRÒ RIÊNG (sát thực tế doanh nghiệp)
 
-| Yêu cầu | Trạng thái | Ghi chú |
-|--------|------------|---------|
-| Danh sách SV, tìm/lọc | ✅ | AdminStudents.jsx |
-| Duyệt/từ chối, ghi chú | ✅ | API status, admin_note |
-| Phân công người hướng dẫn | ✅ | mentor_ref |
-| Đánh giá, chấm điểm | ✅ | final_grade, final_status |
-| Thống kê, Xuất CSV | ✅ | GET /api/admin/stats, /export/csv |
+### 1. Admin / Giáo vụ (Nhà trường)
+- **Nhiệm vụ:** Gom SV đủ điều kiện, tạo đợt thực tập, gửi danh sách (xem qua hệ thống).
+- **Quyền:** Chỉ **XEM** kết quả cuối cùng (nhận xét, điểm). Cập nhật **trạng thái duyệt** (Chờ duyệt / Đang thực tập / Đã hoàn thành / Từ chối) và **ghi chú**. **Không** có nút sửa điểm, **không** phân công cán bộ hướng dẫn.
+
+### 2. Quản lý Doanh nghiệp / HR (Công ty)
+- **Nhiệm vụ:** Đăng nhập, tiếp nhận danh sách SV từ trường.
+- **Quyền:** Thêm danh sách **Mentor** (tạo tài khoản role=mentor), **gán sinh viên cho Mentor** (phân công người hướng dẫn). Không đánh giá điểm.
+
+### 3. Mentor (Người hướng dẫn trực tiếp)
+- **Nhiệm vụ:** Đăng nhập, chỉ thấy **đúng danh sách SV được HR gán cho mình**.
+- **Quyền:** **Nhập nhận xét**, **chấm điểm** (Đạt/Không đạt), **Xác nhận kết thúc**. Dữ liệu đẩy ngược cho Nhà trường xem.
 
 ---
 

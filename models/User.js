@@ -11,7 +11,7 @@ const UserSchema = new mongoose.Schema(
     // === THÔNG TIN CƠ BẢN (TÙY CHỌN) ===
     role: { 
       type: String, 
-      enum: ["admin", "student", "lecturer"], 
+      enum: ["admin", "student", "company_hr", "mentor", "lecturer"], 
       default: "student" 
     },
     phone: { type: String, default: null },           // Optional - có thể bổ sung sau
@@ -29,6 +29,9 @@ const UserSchema = new mongoose.Schema(
     department: { type: String, default: null },      // Optional - Khoa/Viện (Lecturer)
     major: { type: String, default: null },           // Optional - Ngành
     class_name: { type: String, default: null },      // Optional - Lớp sinh hoạt
+
+    // === THÔNG TIN DOANH NGHIỆP (multi-tenant) ===
+    company_id: { type: mongoose.Schema.Types.ObjectId, ref: "Company", default: null },
 
     // === THÔNG TIN THỰC TẬP ===
     internship_unit: { type: String },        // Đơn vị thực tập
@@ -53,10 +56,11 @@ const UserSchema = new mongoose.Schema(
       default: null 
     },
 
-    // === PHÂN CÔNG HƯỚNG DẪN ===
-    mentor_name: { type: String },            // Tên người hướng dẫn
+    // === PHÂN CÔNG HƯỚNG DẪN (do HR gán, Mentor là user trong hệ thống) ===
+    mentor_id: { type: mongoose.Schema.Types.ObjectId, ref: "User" },  // Tài khoản Mentor (role=mentor)
+    mentor_name: { type: String },            // Tên người hướng dẫn (sync từ mentor khi gán)
     mentor_email: { type: String },           // Email người hướng dẫn
-    mentor_phone: { type: String },           // SĐT người hướng dẫn
+    mentor_phone: { type: String },            // SĐT người hướng dẫn
 
     // === KẾT QUẢ ĐÁNH GIÁ (Composite Grading) ===
     mentor_feedback: { type: String },        // Nhận xét từ doanh nghiệp/mentor
@@ -80,7 +84,10 @@ const UserSchema = new mongoose.Schema(
 
     // === XÁC THỰC 2 BƯỚC (TOTP - Google Authenticator) ===
     totpSecret: { type: String, default: null },
-    totpEnabled: { type: Boolean, default: false }
+    totpEnabled: { type: Boolean, default: false },
+
+    // === TRẠNG THÁI TÀI KHOẢN (đặc biệt dùng cho Mentor/HR) ===
+    is_active: { type: Boolean, default: true }
   },
   { timestamps: true }
 );
@@ -95,5 +102,13 @@ UserSchema.pre('save', function(next) {
   }
   next();
 });
+
+// Index cho truy vấn lọc nhanh (tránh collection scan, giảm thời gian load khi lọc)
+UserSchema.index({ role: 1, company_id: 1 });
+UserSchema.index({ role: 1, mentor_id: 1 });
+UserSchema.index({ role: 1, internship_status: 1 });
+UserSchema.index({ role: 1, company_id: 1, internship_status: 1 });
+UserSchema.index({ role: 1, internship_period_id: 1 });
+UserSchema.index({ createdAt: -1 });
 
 module.exports = mongoose.model("User", UserSchema);

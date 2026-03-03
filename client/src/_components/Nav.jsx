@@ -12,7 +12,9 @@ import {
     LoginOutlined,
     FormOutlined,
     DatabaseOutlined,
-    BarChartOutlined
+    BarChartOutlined,
+    TeamOutlined,
+    SolutionOutlined
 } from '@ant-design/icons';
 
 const { Sider } = Layout;
@@ -58,23 +60,50 @@ function Nav(props) {
                     <Link to="/"></Link>
                 </Menu.Item>
 
-                {/* Menu cho Admin */}
+                {/* Menu cho Admin (Nhà trường) */}
                 {userData?.role === "admin" && (
                     <>
                         <Menu.Item key="/admin/dashboard">
                             <BarChartOutlined />
-                            <span>Thống kê (Analytics)</span>
+                            <span>Thống kê</span>
                             <Link to="/admin/dashboard" />
                         </Menu.Item>
                         <Menu.Item key="/admin/students">
                             <TableOutlined />
-                            <span>Quản lý SV thực tập</span>
+                            <span>Quản lý SV (xem kết quả)</span>
                             <Link to="/admin/students" />
+                        </Menu.Item>
+                        <Menu.Item key="/admin/companies">
+                            <TeamOutlined />
+                            <span>Doanh nghiệp &amp; HR</span>
+                            <Link to="/admin/companies" />
                         </Menu.Item>
                         <Menu.Item key="/dbportal">
                             <DatabaseOutlined />
                             <span>Import dữ liệu</span>
                             <Link to="/dbportal" />
+                        </Menu.Item>
+                    </>
+                )}
+
+                {/* Menu cho Quản lý Doanh nghiệp / HR */}
+                {userData?.role === "company_hr" && (
+                    <>
+                        <Menu.Item key="/company/students">
+                            <TeamOutlined />
+                            <span>Danh sách SV &amp; Gán Mentor</span>
+                            <Link to="/company/students" />
+                        </Menu.Item>
+                    </>
+                )}
+
+                {/* Menu cho Mentor – chỉ thấy SV được gán, đánh giá */}
+                {userData?.role === "mentor" && (
+                    <>
+                        <Menu.Item key="/mentor/students">
+                            <SolutionOutlined />
+                            <span>Sinh viên tôi hướng dẫn</span>
+                            <Link to="/mentor/students" />
                         </Menu.Item>
                     </>
                 )}

@@ -1,6 +1,9 @@
 const express = require("express");
 const mongoose = require("mongoose");
+const bcrypt = require("bcryptjs");
 const User = require("../models/User");
+const InternshipPeriod = require("../models/InternshipPeriod");
+const Company = require("../models/Company");
 const { authMiddleware } = require("../middleware/auth");
 const { getDashboardStats } = require("../controllers/adminController");
 
@@ -68,10 +71,10 @@ function convertToCSV(data, headers) {
   return BOM + headerRow + '\n' + rows;
 }
 
-// Middleware kiểm tra quyền Admin
+// Middleware kiểm tra quyền Admin (Nhà trường – chỉ xem, duyệt đợt, không phân công không sửa điểm)
 const adminOnly = (req, res, next) => {
   if (req.user.role !== "admin") {
-    return res.status(403).json({ status: "Error", message: "Chỉ Admin mới có quyền truy cập" });
+    return res.status(403).json({ status: "Error", message: "Chỉ Admin/Giáo vụ mới có quyền truy cập" });
   }
   next();
 };
@@ -133,7 +136,7 @@ router.get("/stats", authMiddleware, adminOnly, async (req, res) => {
 });
 
 // ============================================
-// GET /api/admin/students - Lấy danh sách sinh viên
+// GET /api/admin/students - Lấy danh sách sinh viên (Admin CHỈ XEM, không sửa điểm không phân công)
 // ============================================
 router.get("/students", authMiddleware, adminOnly, async (req, res) => {
   try {
@@ -187,7 +190,8 @@ router.get("/students", authMiddleware, adminOnly, async (req, res) => {
 
     const students = await User.find(query)
       .select("-password")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
 
     // Sanitize: internship_period không được chứa tên người (vd: "Nguyễn Văn A")
     const periodNamePattern = /^(đợt|kỳ|hè|đông|xuân|202\d|20\d\d)/i;
@@ -200,7 +204,6 @@ router.get("/students", authMiddleware, adminOnly, async (req, res) => {
       return s;
     };
 
-    // Map dữ liệu cho frontend (đảm bảo tương thích với cả field cũ và mới)
     const data = students.map(user => ({
       _id: user._id,
       student_code: user.student_code,
@@ -225,6 +228,7 @@ router.get("/students", authMiddleware, adminOnly, async (req, res) => {
       status: user.internship_status || user.registration_status,
       internship_status: user.internship_status,
       registration_status: user.registration_status,
+      mentor_id: user.mentor_id,
       mentor_name: user.mentor_name,
       mentor_email: user.mentor_email,
       mentor_phone: user.mentor_phone,
@@ -235,6 +239,7 @@ router.get("/students", authMiddleware, adminOnly, async (req, res) => {
       admin_note: user.admin_note,
       cv_url: user.cv_url,
       recommendation_letter_url: user.recommendation_letter_url,
+      company_id: user.company_id,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt
     }));
@@ -299,7 +304,189 @@ router.get("/export/csv", authMiddleware, adminOnly, async (req, res) => {
 });
 
 // ============================================
-// PUT /api/admin/students/:id - Cập nhật thông tin sinh viên (Admin)
+// GET /api/admin/companies - Danh sách doanh nghiệp (all=true: tất cả để quản lý; mặc định chỉ is_active cho dropdown)
+// ============================================
+router.get("/companies", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const all = req.query.all === "1" || req.query.all === "true";
+    const query = all ? {} : { is_active: true };
+    const companies = await Company.find(query)
+      .select(all ? "_id name field email phone is_active" : "_id name field email phone")
+      .sort({ name: 1 })
+      .lean();
+    return res.json({
+      status: "Success",
+      data: companies.map(c => ({
+        _id: c._id,
+        name: c.name,
+        field: c.field || null,
+        email: c.email || null,
+        phone: c.phone || null,
+        ...(all && { is_active: c.is_active !== false })
+      }))
+    });
+  } catch (error) {
+    console.error(">>> [Admin Route] Lỗi lấy danh sách doanh nghiệp:", error.message);
+    return res.status(500).json({ status: "Error", message: "Lỗi server", error: error.message });
+  }
+});
+
+// ============================================
+// PUT /api/admin/companies/:id/toggle-active - Vô hiệu hóa / Kích hoạt doanh nghiệp (ngừng hợp tác)
+// ============================================
+router.put("/companies/:id/toggle-active", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ status: "Error", message: "ID doanh nghiệp không hợp lệ" });
+    }
+    const company = await Company.findById(id);
+    if (!company) {
+      return res.status(404).json({ status: "Error", message: "Không tìm thấy doanh nghiệp" });
+    }
+    company.is_active = company.is_active === false;
+    await company.save();
+    return res.json({
+      status: "Success",
+      message: company.is_active ? "Đã kích hoạt doanh nghiệp." : "Đã vô hiệu hóa doanh nghiệp (ngừng hợp tác).",
+      data: { _id: company._id, name: company.name, is_active: company.is_active }
+    });
+  } catch (error) {
+    console.error(">>> [Admin Route] Lỗi toggle active company:", error.message);
+    return res.status(500).json({ status: "Error", message: "Lỗi server", error: error.message });
+  }
+});
+
+// ============================================
+// DELETE /api/admin/companies/:id - Xóa doanh nghiệp (chỉ khi không còn HR và SV liên kết)
+// ============================================
+router.delete("/companies/:id", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ status: "Error", message: "ID doanh nghiệp không hợp lệ" });
+    }
+    const company = await Company.findById(id);
+    if (!company) {
+      return res.status(404).json({ status: "Error", message: "Không tìm thấy doanh nghiệp" });
+    }
+    const hrCount = await User.countDocuments({ role: "company_hr", company_id: id });
+    const studentCount = await User.countDocuments({ role: "student", company_id: id });
+    const mentorCount = await User.countDocuments({ role: "mentor", company_id: id });
+    if (hrCount > 0 || studentCount > 0 || mentorCount > 0) {
+      return res.status(400).json({
+        status: "Error",
+        message: `Không thể xóa doanh nghiệp đang có liên kết: ${hrCount} HR, ${studentCount} sinh viên, ${mentorCount} mentor. Vui lòng chuyển hoặc xóa hết trước khi xóa doanh nghiệp.`
+      });
+    }
+    await Company.deleteOne({ _id: id });
+    return res.json({
+      status: "Success",
+      message: "Đã xóa doanh nghiệp.",
+      data: { _id: id, name: company.name }
+    });
+  } catch (error) {
+    console.error(">>> [Admin Route] Lỗi xóa doanh nghiệp:", error.message);
+    return res.status(500).json({ status: "Error", message: "Lỗi server", error: error.message });
+  }
+});
+
+// ============================================
+// GET /api/admin/companies/:id/hrs - Danh sách HR của một doanh nghiệp
+// ============================================
+router.get("/companies/:id/hrs", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ status: "Error", message: "ID doanh nghiệp không hợp lệ" });
+    }
+
+    const hrs = await User.find({ role: "company_hr", company_id: id })
+      .select("_id student_code full_name email phone")
+      .sort({ full_name: 1 })
+      .lean();
+
+    return res.json({ status: "Success", data: hrs });
+  } catch (error) {
+    console.error(">>> [Admin Route] Lỗi lấy danh sách HR:", error.message);
+    return res.status(500).json({ status: "Error", message: "Lỗi server", error: error.message });
+  }
+});
+
+// ============================================
+// POST /api/admin/companies/:id/hrs - Tạo HR mới cho doanh nghiệp
+// ============================================
+router.post("/companies/:id/hrs", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { student_code, full_name, email, password, phone } = req.body || {};
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ status: "Error", message: "ID doanh nghiệp không hợp lệ" });
+    }
+    if (!student_code || !String(student_code).trim()) {
+      return res.status(400).json({ status: "Error", message: "Vui lòng nhập mã đăng nhập (student_code)" });
+    }
+    if (!full_name || !String(full_name).trim()) {
+      return res.status(400).json({ status: "Error", message: "Vui lòng nhập họ tên" });
+    }
+    if (!email || !String(email).trim()) {
+      return res.status(400).json({ status: "Error", message: "Vui lòng nhập email" });
+    }
+
+    const company = await Company.findById(id).select("_id name");
+    if (!company) {
+      return res.status(404).json({ status: "Error", message: "Không tìm thấy doanh nghiệp" });
+    }
+
+    const existing = await User.findOne({
+      $or: [
+        { student_code: String(student_code).trim() },
+        { email: String(email).trim().toLowerCase() }
+      ]
+    });
+    if (existing) {
+      return res.status(400).json({
+        status: "Error",
+        message: existing.student_code === String(student_code).trim()
+          ? "Mã đăng nhập đã tồn tại"
+          : "Email đã được sử dụng"
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(password || "123456", 10);
+    const hr = await User.create({
+      student_code: String(student_code).trim(),
+      full_name: String(full_name).trim(),
+      email: String(email).trim().toLowerCase(),
+      password: hashedPassword,
+      role: "company_hr",
+      company_id: company._id,
+      phone: phone ? String(phone).trim() : null
+    });
+
+    const hrData = {
+      _id: hr._id,
+      student_code: hr.student_code,
+      full_name: hr.full_name,
+      email: hr.email,
+      phone: hr.phone,
+      role: hr.role
+    };
+
+    return res.json({
+      status: "Success",
+      message: `Đã tạo tài khoản HR cho doanh nghiệp ${company.name}`,
+      data: hrData
+    });
+  } catch (error) {
+    console.error(">>> [Admin Route] Lỗi tạo HR:", error.message);
+    return res.status(500).json({ status: "Error", message: "Lỗi server", error: error.message });
+  }
+});
+
+// ============================================
+// PUT /api/admin/students/:id - Admin CHỈ được cập nhật trạng thái duyệt + admin_note (không sửa điểm, không phân công mentor)
 // ============================================
 router.put("/students/:id", authMiddleware, adminOnly, async (req, res) => {
   try {
@@ -311,23 +498,46 @@ router.put("/students/:id", authMiddleware, adminOnly, async (req, res) => {
       return res.status(404).json({ status: "Error", message: "Không tìm thấy sinh viên" });
     }
 
-    // Admin có thể cập nhật các trường sau (bao gồm thông tin cơ bản, SĐT phụ huynh, địa chỉ)
+    // Admin (Nhà trường) CHỈ được: duyệt/từ chối, ghi chú, đợt, gán doanh nghiệp – KHÔNG được sửa điểm, mentor_feedback, phân công mentor
     const allowedFields = [
-      "full_name", "email", "phone", "parent_number", "address", "university", "faculty", "major", "class_name",
       "internship_status", "registration_status", "status",
-      "mentor_name", "mentor_email", "mentor_phone",
-      "mentor_feedback", "report_score", "final_grade", "final_status",
-      "admin_note", "internship_unit", "internship_topic",
-      "start_date", "end_date"
+      "admin_note", "internship_period_id", "internship_period", "period_id",
+      "company_id"
     ];
 
     const updateData = {};
     for (const [field, value] of Object.entries(updateFields)) {
       if (allowedFields.includes(field) && value !== undefined) {
-        // Sync internship_status và registration_status
         if (field === "status" || field === "internship_status" || field === "registration_status") {
           updateData.internship_status = value;
           updateData.registration_status = value;
+        } else if (field === "internship_period_id" || field === "internship_period") {
+          updateData[field] = value;
+        } else if (field === "period_id") {
+          // Resolve period_id to internship_period_id + name
+          if (value && mongoose.Types.ObjectId.isValid(value)) {
+            const period = await InternshipPeriod.findById(value).select("name code").lean();
+            if (period) {
+              updateData.internship_period_id = value;
+              updateData.internship_period = period.name || period.code || String(value);
+            }
+          } else {
+            updateData.internship_period_id = null;
+            updateData.internship_period = null;
+          }
+        } else if (field === "company_id") {
+          if (value && mongoose.Types.ObjectId.isValid(value)) {
+            const company = await Company.findById(value).select("name").lean();
+            if (company) {
+              updateData.company_id = value;
+              // Optional: đồng bộ tên công ty vào internship_unit nếu chưa có
+              if (!user.internship_unit) {
+                updateData.internship_unit = company.name;
+              }
+            }
+          } else {
+            updateData.company_id = null;
+          }
         } else {
           updateData[field] = value;
         }

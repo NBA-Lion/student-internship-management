@@ -17,6 +17,7 @@ const router = express.Router();
 
 const failedAttempts = new Map();
 const FAILED_THRESHOLD = 3;
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
 
 function getClientIp(req) {
   return (req.headers["x-forwarded-for"] && req.headers["x-forwarded-for"].split(",")[0].trim()) || req.socket?.remoteAddress || req.ip || "unknown";
@@ -55,7 +56,8 @@ router.post("/login", async (req, res) => {
   try {
     const ip = getClientIp(req);
     const count = failedAttempts.get(ip) || 0;
-    const requireCaptcha = count >= FAILED_THRESHOLD;
+    // Chỉ bật reCAPTCHA trên môi trường production
+    const requireCaptcha = IS_PRODUCTION && count >= FAILED_THRESHOLD;
     const { student_code, email, username, password, recaptchaToken } = req.body;
 
     if (requireCaptcha) {
@@ -97,6 +99,13 @@ router.post("/login", async (req, res) => {
       return res.status(401).json({
         message: "Mã đăng nhập/email hoặc mật khẩu không đúng. Nếu bạn đã đổi mã nhân viên, hãy thử đăng nhập bằng email.",
         requireCaptcha: (count + 1) >= FAILED_THRESHOLD
+      });
+    }
+
+    // Khoá đăng nhập nếu Mentor bị set is_active = false
+    if (user.role === "mentor" && user.is_active === false) {
+      return res.status(403).json({
+        message: "Tài khoản Mentor này đã bị khoá bởi HR. Vui lòng liên hệ bộ phận nhân sự của doanh nghiệp.",
       });
     }
 

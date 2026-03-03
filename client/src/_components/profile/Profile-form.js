@@ -94,6 +94,7 @@ const formatTimestampToMoment = (timestamp) => {
 const getRoleDisplay = (role) => {
     switch (role) {
         case 'admin': return { text: 'Quản trị viên', color: 'red' };
+        case 'company_hr': return { text: 'Doanh nghiệp (HR)', color: 'geekblue' };
         case 'mentor': return { text: 'Cán bộ hướng dẫn', color: 'blue' };
         case 'teacher': return { text: 'Giảng viên', color: 'purple' };
         case 'student': return { text: 'Sinh viên', color: 'green' };
@@ -108,6 +109,15 @@ const getInternStatusDisplay = (status) => {
         case 'rejected': return { text: 'Từ chối', color: 'red' };
         case 'completed': return { text: 'Hoàn thành', color: 'blue' };
         default: return { text: status || 'Chưa xác định', color: 'default' };
+    }
+};
+
+const getFinalResultDisplay = (status) => {
+    switch (status) {
+        case 'Đạt': return { text: 'Đạt', color: 'green' };
+        case 'Không đạt': return { text: 'Không đạt', color: 'red' };
+        case 'Pending': return { text: 'Chưa xác nhận', color: 'default' };
+        default: return { text: 'Chưa đánh giá', color: 'default' };
     }
 };
 
@@ -157,7 +167,8 @@ function ProfileForm(props) {
     
     // Determine user role (safe check, không phân biệt hoa thường)
     const userRole = (data?.role || userData?.role || 'student').toString().toLowerCase();
-    const isAdmin = ['admin', 'mentor', 'teacher'].includes(userRole);
+    // Admin-like view: Admin, Mentor, Giảng viên, HR doanh nghiệp
+    const isAdmin = ['admin', 'mentor', 'teacher', 'company_hr'].includes(userRole);
     const isStudent = userRole === 'student';
 
     // ============================================
@@ -634,7 +645,7 @@ function ProfileForm(props) {
                             <Card title={
                                 <span style={sectionTitleStyle}>
                                     <SafetyCertificateOutlined style={{ color: '#667eea' }} />
-                                    Thông tin thực tập
+                                    Thông tin thực tập & doanh nghiệp
                                     <Tag color="blue" style={{ marginLeft: 8, fontWeight: 400 }}>Chỉ xem</Tag>
                                 </span>
                             } style={cardStyle}>
@@ -643,10 +654,15 @@ function ProfileForm(props) {
                                 </Text>
                                 <Row gutter={24}>
                                     <Col xs={24} md={12}>
-                                        <Form.Item label="Đơn vị thực tập">
+                                        <Form.Item label="Đơn vị thực tập / Doanh nghiệp">
                                             <Input 
                                                 prefix={<BankOutlined style={{ color: '#bfbfbf' }} />}
-                                                value={data.department || data.intern_company || 'Chưa đăng ký'}
+                                                value={
+                                                    data.internship_unit ||
+                                                    data.intern_company ||
+                                                    data.department ||
+                                                    'Chưa đăng ký'
+                                                }
                                                 disabled
                                                 style={{ backgroundColor: '#fafafa' }}
                                             />
@@ -663,7 +679,7 @@ function ProfileForm(props) {
                                         </Form.Item>
                                     </Col>
                                     <Col xs={24} md={12}>
-                                        <Form.Item label="Trạng thái">
+                                        <Form.Item label="Trạng thái hồ sơ">
                                             <div>
                                                 <Tag color={getInternStatusDisplay(data.internship_status).color}>
                                                     {getInternStatusDisplay(data.internship_status).text}
@@ -689,6 +705,41 @@ function ProfileForm(props) {
                                                 disabled
                                                 style={{ backgroundColor: '#fafafa' }}
                                             />
+                                        </Form.Item>
+                                    </Col>
+                                    <Col xs={24} md={12}>
+                                        <Form.Item label="Người hướng dẫn (Mentor)">
+                                            <Input
+                                                prefix={<TeamOutlined style={{ color: '#bfbfbf' }} />}
+                                                value={data.mentor_name || 'Chưa được phân công'}
+                                                disabled
+                                                style={{ backgroundColor: '#fafafa' }}
+                                            />
+                                        </Form.Item>
+                                    </Col>
+                                    <Col xs={24} md={12}>
+                                        <Form.Item label="Kết quả từ doanh nghiệp">
+                                            <div>
+                                                <Tag color={getFinalResultDisplay(data.final_status).color}>
+                                                    {getFinalResultDisplay(data.final_status).text}
+                                                </Tag>
+                                            </div>
+                                        </Form.Item>
+                                    </Col>
+                                    <Col xs={24}>
+                                        <Form.Item label="Nhận xét từ doanh nghiệp">
+                                            <div
+                                                style={{
+                                                    minHeight: 60,
+                                                    padding: 8,
+                                                    borderRadius: 6,
+                                                    border: '1px dashed #d9d9d9',
+                                                    backgroundColor: '#fafafa',
+                                                    whiteSpace: 'pre-wrap'
+                                                }}
+                                            >
+                                                {data.mentor_feedback || 'Chưa có nhận xét'}
+                                            </div>
                                         </Form.Item>
                                     </Col>
                                 </Row>

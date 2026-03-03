@@ -164,11 +164,24 @@ async function seed() {
 
     // Luôn đảm bảo có ADMIN (quan trọng khi deploy lần đầu)
     const adminUser = sampleUsers.find(u => u.role === 'admin');
-    const hasAdmin = await User.findOne({ student_code: adminUser.student_code });
+    const hasAdmin = await User.findOne({
+      $or: [
+        { student_code: adminUser.student_code },
+        { email: adminUser.email }
+      ]
+    });
     if (!hasAdmin) {
       const hash = await bcrypt.hash(adminUser.password, 10);
-      await User.create({ ...adminUser, password: hash });
-      console.log(`  ✅ Tạo user: ${adminUser.student_code} - ${adminUser.full_name}`);
+      try {
+        await User.create({ ...adminUser, password: hash });
+        console.log(`  ✅ Tạo user: ${adminUser.student_code} - ${adminUser.full_name}`);
+      } catch (err) {
+        if (err && err.code === 11000) {
+          console.log('  ⏭️ Bỏ qua tạo ADMIN (email hoặc mã đã tồn tại).');
+        } else {
+          throw err;
+        }
+      }
     }
 
     if (needSeed) {
@@ -194,15 +207,6 @@ async function seed() {
         }
       }
 
-      // Tạo companies
-      for (const companyData of sampleCompanies) {
-        const existing = await Company.findOne({ name: companyData.name });
-        if (!existing) {
-          await Company.create(companyData);
-          console.log(`  ✅ Tạo doanh nghiệp: ${companyData.name}`);
-        }
-      }
-
       console.log('\n🎉 Seed dữ liệu thành công!');
     } else if (!hasAdmin) {
       console.log('\n✅ Đã tạo tài khoản ADMIN (database đã có user khác).');
@@ -217,13 +221,57 @@ async function seed() {
       });
     }
 
+    // Luôn đảm bảo có mẫu HR + Mentor + gán company_id cho SV001, SV002 nếu FPT Software tồn tại
+    const fpt = await Company.findOne({ name: 'FPT Software' });
+    if (fpt) {
+      const hrCode = 'HR_FPT';
+      const mentorCode = 'MENTOR_FPT';
+
+      const existingHr = await User.findOne({ student_code: hrCode });
+      if (!existingHr) {
+        const hash = await bcrypt.hash('123', 10);
+        await User.create({
+          student_code: hrCode,
+          full_name: 'HR FPT Software',
+          email: 'hr_fpt@intern.local',
+          password: hash,
+          role: 'company_hr',
+          company_id: fpt._id
+        });
+        console.log(`  ✅ Tạo user HR: ${hrCode} (FPT Software)`);
+      }
+
+      const existingMentor = await User.findOne({ student_code: mentorCode });
+      if (!existingMentor) {
+        const hash = await bcrypt.hash('123', 10);
+        await User.create({
+          student_code: mentorCode,
+          full_name: 'Mentor FPT',
+          email: 'mentor_fpt@intern.local',
+          password: hash,
+          role: 'mentor',
+          company_id: fpt._id
+        });
+        console.log(`  ✅ Tạo user Mentor: ${mentorCode} (FPT Software)`);
+      }
+
+      // Gán company_id cho một vài sinh viên mẫu
+      await User.updateMany(
+        { student_code: { $in: ['SV001', 'SV002'] } },
+        { $set: { company_id: fpt._id } }
+      );
+      console.log('  ✅ Gán company_id FPT Software cho SV001, SV002');
+    }
+
     // Hiển thị thông tin đăng nhập
     console.log('\n🔐 THÔNG TIN ĐĂNG NHẬP MẪU:');
-    console.log('  Admin:   ADMIN / 123');
-    console.log('  Student: SV001 / 123 (Chờ duyệt)');
-    console.log('  Student: SV002 / 123 (Đang thực tập)');
-    console.log('  Student: SV003 / 123 (Đã hoàn thành)');
-    console.log('  Student: SV004 / 123 (Từ chối)');
+    console.log('  Admin:        ADMIN / 123');
+    console.log('  Student:      SV001 / 123 (Chờ duyệt)');
+    console.log('  Student:      SV002 / 123 (Đang thực tập)');
+    console.log('  Student:      SV003 / 123 (Đã hoàn thành)');
+    console.log('  Student:      SV004 / 123 (Từ chối)');
+    console.log('  Company HR:   HR_FPT / 123  (FPT Software)');
+    console.log('  Mentor (FPT): MENTOR_FPT / 123');
 
   } catch (error) {
     console.error('❌ Lỗi:', error.message);

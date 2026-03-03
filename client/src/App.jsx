@@ -27,9 +27,12 @@ const StudentScoreList = lazy(() => import('_components/studentScoreList').then(
 const PersonalScore = lazy(() => import('_components/studentScoreList').then(m => ({ default: m.PersonalScore })));
 const AdminStudents = lazy(() => import('_components/admin/AdminStudents').then(m => ({ default: m.AdminStudents })));
 const AdminDashboard = lazy(() => import('pages/admin/Dashboard').then(m => ({ default: m.default || m.AdminDashboard })));
+const AdminCompanies = lazy(() => import('pages/admin/Companies').then(m => ({ default: m.default || m.AdminCompanies })));
 const DBPortal = lazy(() => import('_components/dbportal/DBPortal').then(m => ({ default: m.default })));
 const StuHome = lazy(() => import('home/StuHome').then(m => ({ default: m.StuHome })));
 const InternshipTabs = lazy(() => import('_components/internship/InternshipTabs').then(m => ({ default: m.default })));
+const CompanyStudents = lazy(() => import('pages/company/CompanyStudents').then(m => ({ default: m.default })));
+const MentorStudents = lazy(() => import('pages/mentor/MentorStudents').then(m => ({ default: m.default })));
 
 // ========== FIX ResizeObserver Loop Error (không vi phạm quy tắc import) ==========
 // Một số component (Table, Layout) dùng ResizeObserver gây ra warning
@@ -199,6 +202,9 @@ function App() {
                                                 <PrivateRoute exact path="/dbportal" component={DBPortal} />
                                                 <PrivateRoute exact path="/admin/dashboard" component={AdminDashboard} />
                                                 <PrivateRoute exact path="/admin/students" component={AdminStudents} />
+                                                <PrivateRoute exact path="/admin/companies" component={AdminCompanies} />
+                                                <PrivateRoute exact path="/company/students" component={CompanyStudents} />
+                                                <PrivateRoute exact path="/mentor/students" component={MentorStudents} />
                                                 <PrivateRoute exact path="/internship" component={InternshipTabs} />
                                                 <PrivateRoute path="/:classID" component={Child} />
                                                 <Redirect from="*" to="/" />
@@ -283,7 +289,9 @@ function ClassNameDisplay(){
 
     if (hasAuth && userData && (userData.full_name || userData.name || userData.role)) {
         const fullName = userData.full_name || userData.name || "User";
-        const role = userData.role === "admin" ? "Giáo vụ"
+        const role = userData.role === "admin" ? "Quản trị"
+                   : userData.role === "company_hr" ? "Doanh nghiệp (HR)"
+                   : userData.role === "mentor" ? "Mentor"
                    : userData.role === "student" ? "Sinh viên"
                    : "Cán bộ";
         return `Hi, ${fullName} (${role})`;

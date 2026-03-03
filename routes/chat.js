@@ -7,6 +7,18 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 
+/** HR/Mentor chỉ được chat với user cùng công ty hoặc Admin. */
+async function canChatWith(myRole, myCompanyId, otherStudentCode) {
+  const role = (myRole || "").toLowerCase();
+  if (role === "admin") return true;
+  if (role !== "company_hr" && role !== "mentor") return true;
+  if (!myCompanyId) return false;
+  const other = await User.findOne({ student_code: otherStudentCode }).select("company_id role").lean();
+  if (!other) return false;
+  if (other.role === "admin") return true;
+  return other.company_id && String(other.company_id) === String(myCompanyId);
+}
+
 // Multer for chat images
 const chatUploadDir = path.join(__dirname, "..", "uploads", "chat");
 if (!fs.existsSync(chatUploadDir)) fs.mkdirSync(chatUploadDir, { recursive: true });
@@ -41,6 +53,9 @@ const chatFileUpload = multer({
 router.get("/conversations", authMiddleware, async (req, res) => {
   try {
     const my = req.user.student_code;
+    const myRole = (req.user.role || "").toLowerCase();
+    const myCompanyId = req.user.company_id || null;
+
     const agg = await Message.aggregate([
       { $match: { $or: [{ sender: my }, { receiver: my }] } },
       { $sort: { createdAt: -1 } },
@@ -55,19 +70,103 @@ router.get("/conversations", authMiddleware, async (req, res) => {
     ]);
 
     const data = await Promise.all(agg.map(async (c) => {
-      const user = await User.findOne({ student_code: c._id }).select("student_code full_name email avatar_url role");
-      return {
+      const user = await User.findOne({ student_code: c._id }).select("student_code full_name email avatar_url role company_id");
+      const isHrOrMentor = myRole === "company_hr" || myRole === "mentor";
+      if (!user) {
+        const fallback = { partner_id: c._id, partner: { vnu_id: c._id, name: "Người dùng" }, last_message: c.lastMessage, unread_count: c.unreadCount, timestamp: c.lastMessage.createdAt, _allow: !isHrOrMentor };
+        return fallback;
+      }
+      const partnerPayload = { vnu_id: user.student_code, student_code: user.student_code, name: user.full_name, email: user.email, avatar_url: user.avatar_url, role: user.role };
+      const item = {
         partner_id: c._id,
-        partner: user ? { vnu_id: user.student_code, student_code: user.student_code, name: user.full_name, email: user.email, avatar_url: user.avatar_url, role: user.role } : { vnu_id: c._id, name: "Người dùng" },
+        partner: partnerPayload,
         last_message: { _id: c.lastMessage._id, message: c.lastMessage.message, type: c.lastMessage.type, sender: c.lastMessage.sender, is_mine: c.lastMessage.sender === my, createdAt: c.lastMessage.createdAt },
         unread_count: c.unreadCount,
-        timestamp: c.lastMessage.createdAt
+        timestamp: c.lastMessage.createdAt,
+        _allow: true
+      };
+      if (isHrOrMentor) {
+        const sameCompany = myCompanyId && user.company_id && String(user.company_id) === String(myCompanyId);
+        const isAdmin = user.role === "admin";
+        if (!sameCompany && !isAdmin) item._allow = false;
+      }
+      return item;
+    }));
+
+    const filtered = (myRole === "company_hr" || myRole === "mentor")
+      ? data.filter((d) => d._allow !== false).map(({ _allow, ...rest }) => rest)
+      : data.map(({ _allow, ...rest }) => rest);
+
+    // Không hiển thị chính user đăng nhập trong danh sách chat
+    const withoutSelf = filtered.filter((d) => {
+      const pid = d.partner_id || (d.partner && d.partner.vnu_id);
+      return pid != null && String(pid) !== String(my);
+    });
+
+    return res.json({ status: "Success", data: withoutSelf });
+  } catch (e) {
+    console.error(">>> [Chat] conversations:", e.message);
+    return res.status(500).json({ status: "Error", message: "Lỗi server" });
+  }
+});
+
+// GET /api/chat/recent-contacts — Danh sách liên hệ gần đây (lọc nội bộ công ty giống /conversations)
+router.get("/recent-contacts", authMiddleware, async (req, res) => {
+  try {
+    const my = req.user.student_code;
+    const myRole = (req.user.role || "").toLowerCase();
+    const myCompanyId = req.user.company_id || null;
+
+    const agg = await Message.aggregate([
+      { $match: { $or: [{ sender: my }, { receiver: my }] } },
+      { $sort: { createdAt: -1 } },
+      {
+        $group: {
+          _id: { $cond: [{ $eq: ["$sender", my] }, "$receiver", "$sender"] },
+          lastMessage: { $first: "$$ROOT" },
+          unreadCount: { $sum: { $cond: [{ $and: [{ $eq: ["$receiver", my] }, { $eq: ["$is_read", false] }] }, 1, 0] } }
+        }
+      },
+      { $sort: { "lastMessage.createdAt": -1 } }
+    ]);
+
+    const data = await Promise.all(agg.map(async (c) => {
+      const user = await User.findOne({ student_code: c._id }).select("student_code full_name email avatar_url role company_id");
+      const isHrOrMentor = myRole === "company_hr" || myRole === "mentor";
+      if (!user) {
+        return { partner_id: c._id, partner: { vnu_id: c._id, name: "Người dùng" }, last_message: c.lastMessage, unread_count: c.unreadCount, timestamp: c.lastMessage.createdAt, _allow: !isHrOrMentor };
+      }
+      const sameCompany = isHrOrMentor && myCompanyId && user.company_id && String(user.company_id) === String(myCompanyId);
+      const isAdmin = user.role === "admin";
+      const _allow = !isHrOrMentor || sameCompany || isAdmin;
+      return {
+        partner_id: c._id,
+        partner: { vnu_id: user.student_code, student_code: user.student_code, name: user.full_name, email: user.email, avatar_url: user.avatar_url, role: user.role },
+        last_message: c.lastMessage,
+        unread_count: c.unreadCount,
+        timestamp: c.lastMessage.createdAt,
+        _allow
       };
     }));
 
-    return res.json({ status: "Success", data });
+    const filtered = (myRole === "company_hr" || myRole === "mentor")
+      ? data.filter((d) => d._allow !== false) : data;
+
+    // Không hiển thị chính user đăng nhập trong danh sách chat
+    const withoutSelf = filtered.filter((d) => {
+      const pid = d.partner_id || (d.partner && d.partner.vnu_id);
+      return pid != null && String(pid) !== String(my);
+    });
+
+    const list = withoutSelf.map((c) => ({
+      contact: c.partner ? { vnu_id: c.partner.vnu_id, student_code: c.partner.student_code, name: c.partner.name, email: c.partner.email, avatar_url: c.partner.avatar_url, role: c.partner.role } : { vnu_id: c.partner_id, name: "Người dùng" },
+      latest_message: c.last_message || {},
+      unread_count: c.unread_count,
+      timestamp: c.timestamp
+    }));
+    return res.json({ status: "Success", data: list });
   } catch (e) {
-    console.error(">>> [Chat] conversations:", e.message);
+    console.error(">>> [Chat] recent-contacts:", e.message);
     return res.status(500).json({ status: "Error", message: "Lỗi server" });
   }
 });
@@ -163,12 +262,20 @@ router.get("/messages/:student_code", authMiddleware, async (req, res) => {
 router.post("/send-message", authMiddleware, async (req, res) => {
   try {
     const my = req.user.student_code;
+    const myRole = (req.user.role || "").toLowerCase();
+    const myCompanyId = req.user.company_id || null;
     const { to, message: content, type: msgType } = req.body || {};
     if (!to || !content) {
       return res.status(400).json({ status: "Error", message: "Thiếu người nhận hoặc nội dung" });
     }
     if (to === my) {
       return res.status(400).json({ status: "Error", message: "Không thể gửi tin nhắn cho chính mình" });
+    }
+    if (myRole === "company_hr" || myRole === "mentor") {
+      const allowed = await canChatWith(myRole, myCompanyId, to);
+      if (!allowed) {
+        return res.status(403).json({ status: "Error", message: "Bạn chỉ được nhắn tin với người dùng trong nội bộ công ty mình hoặc Admin." });
+      }
     }
 
     const newMessage = await Message.create({
@@ -340,20 +447,37 @@ router.delete("/conversation/:partnerId", authMiddleware, async (req, res) => {
   }
 });
 
-// GET /api/chat/users — tìm kiếm khớp một phần (partial), escape ký tự đặc biệt regex
+// GET /api/chat/users — tìm kiếm khớp một phần (partial), escape ký tự đặc biệt regex. HR/Mentor chỉ thấy user cùng công ty (hoặc Admin).
 router.get("/users", authMiddleware, async (req, res) => {
   try {
     const my = req.user.student_code;
+    const myRole = (req.user.role || "").toLowerCase();
+    const myCompanyId = req.user.company_id || null;
     const search = req.query.search;
+
     let query = { student_code: { $ne: my } };
+    if (myRole === "company_hr" || myRole === "mentor") {
+      if (myCompanyId) {
+        query.$or = [
+          { company_id: myCompanyId },
+          { role: "admin" }
+        ];
+      } else {
+        query.role = "admin";
+      }
+    }
     if (search && String(search).trim()) {
       const escaped = String(search).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      query.$or = [
-        { full_name: { $regex: escaped, $options: "i" } },
-        { student_code: { $regex: escaped, $options: "i" } },
-        { email: { $regex: escaped, $options: "i" } }
-      ];
+      const searchCond = {
+        $or: [
+          { full_name: { $regex: escaped, $options: "i" } },
+          { student_code: { $regex: escaped, $options: "i" } },
+          { email: { $regex: escaped, $options: "i" } }
+        ]
+      };
+      query = query.$or ? { $and: [query, searchCond] } : { ...query, ...searchCond };
     }
+
     const users = await User.find(query).select("student_code full_name email avatar_url role").limit(20);
     const data = users.map((u) => ({
       vnu_id: u.student_code,
@@ -385,9 +509,18 @@ router.post("/upload-image", authMiddleware, chatUpload.single("image"), async (
     if (!req.file) return res.status(400).json({ status: "Error", message: "Không có file" });
     const to = req.body.to;
     const from = req.user.student_code;
+    const myRole = (req.user.role || "").toLowerCase();
+    const myCompanyId = req.user.company_id || null;
     if (!to) {
       fs.unlinkSync(req.file.path);
       return res.status(400).json({ status: "Error", message: "Thiếu người nhận" });
+    }
+    if (myRole === "company_hr" || myRole === "mentor") {
+      const allowed = await canChatWith(myRole, myCompanyId, to);
+      if (!allowed) {
+        fs.unlinkSync(req.file.path);
+        return res.status(403).json({ status: "Error", message: "Bạn chỉ được gửi file cho người dùng trong nội bộ công ty mình hoặc Admin." });
+      }
     }
     const imageUrl = "/uploads/chat/" + req.file.filename;
     const newMessage = await Message.create({
@@ -429,9 +562,18 @@ router.post("/upload-file", authMiddleware, chatFileUpload.single("file"), async
     if (!req.file) return res.status(400).json({ status: "Error", message: "Không có file" });
     const to = req.body.to;
     const from = req.user.student_code;
+    const myRole = (req.user.role || "").toLowerCase();
+    const myCompanyId = req.user.company_id || null;
     if (!to) {
       fs.unlinkSync(req.file.path);
       return res.status(400).json({ status: "Error", message: "Thiếu người nhận" });
+    }
+    if (myRole === "company_hr" || myRole === "mentor") {
+      const allowed = await canChatWith(myRole, myCompanyId, to);
+      if (!allowed) {
+        fs.unlinkSync(req.file.path);
+        return res.status(403).json({ status: "Error", message: "Bạn chỉ được gửi file cho người dùng trong nội bộ công ty mình hoặc Admin." });
+      }
     }
     const fileUrl = "/uploads/chat/" + req.file.filename;
     const isImage = (req.file.mimetype || "").startsWith("image/");

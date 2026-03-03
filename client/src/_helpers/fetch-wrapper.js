@@ -19,11 +19,19 @@ function useFetchWrapper() {
     };
 
     function request(method) {
-        return (url, contentType, body) => {
+        return (url, contentTypeOrOptions, body) => {
             const requestOptions = {
                 method: method,
                 headers: authHeader(url)
             };
+
+            let contentType = contentTypeOrOptions;
+            let options = null;
+            if (contentTypeOrOptions && typeof contentTypeOrOptions === 'object' && !(contentTypeOrOptions instanceof String)) {
+                options = contentTypeOrOptions;
+                if (options.signal) requestOptions.signal = options.signal;
+                contentType = options.contentType || null;
+            }
 
             if (contentType) {
                 requestOptions.headers['Content-Type'] = contentType;

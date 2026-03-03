@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRecoilState, useSetRecoilState } from 'recoil';
 import { useHistory, useLocation } from 'react-router-dom';
 import { 
@@ -16,6 +16,8 @@ import { normalizeFileUrl } from '_helpers/Constant';
 import { getUserData } from '_helpers/auth-storage';
 import { sessionExpiredAtom } from '_state';
 import moment from 'moment';
+import { useStudentsData } from '_components/admin/hooks/useStudentsData';
+import { StudentFilterBar } from '_components/admin/StudentFilterBar';
 
 const { Option } = Select;
 const { Text } = Typography;
@@ -68,6 +70,44 @@ function arrayToCSV(data, headers) {
     return BOM + headerRow + '\n' + rows;
 }
 
+// Xác định năm thực tập của một sinh viên dựa trên:
+// 1) start_date/startDate của chính sinh viên (ưu tiên cao nhất)
+// 2) startDate/start_date của đợt thực tập (period) mà sinh viên thuộc về
+// 3) Năm xuất hiện trong chuỗi internship_period (vd: "Đợt Thu 2025")
+function getStudentYear(student, periods) {
+    if (!student) return null;
+    const rawStart =
+        student.start_date ||
+        student.startDate ||
+        student.intern_start_date ||
+        null;
+    if (rawStart) {
+        const d = new Date(rawStart);
+        if (!Number.isNaN(d.getTime())) return d.getFullYear();
+    }
+
+    if (student.internship_period_id && Array.isArray(periods) && periods.length > 0) {
+        const period = periods.find(
+            (p) => String(p._id) === String(student.internship_period_id)
+        );
+        if (period) {
+            const d = period.startDate || period.start_date;
+            if (d) {
+                const date = new Date(d);
+                if (!Number.isNaN(date.getTime())) return date.getFullYear();
+            }
+        }
+    }
+
+    const text = (student.internship_period || '').toString();
+    const match = text.match(/\b(20\d{2})\b/);
+    if (match) {
+        const y = parseInt(match[1], 10);
+        return Number.isNaN(y) ? null : y;
+    }
+    return null;
+}
+
 export { AdminStudents };
 
 function AdminStudents() {
@@ -76,17 +116,31 @@ function AdminStudents() {
     const fetchWrapper = useFetchWrapper();
     const setSessionExpired = useSetRecoilState(sessionExpiredAtom);
     const userData = getUserData();
-    const [loading, setLoading] = useState(false);
     const [approving, setApproving] = useState(null);
-    const [deleting, setDeleting] = useState(null); // Track which student is being deleted
-    const [students, setStudents] = useState([]);
-    const [mentors, setMentors] = useState([]);
+    const [deleting, setDeleting] = useState(null);
     const [periods, setPeriods] = useState([]);
-    const [statusFilter, setStatusFilter] = useState();
-    const [majorFilter, setMajorFilter] = useState('');
-    const [universityFilter, setUniversityFilter] = useState('');
-    const [periodFilter, setPeriodFilter] = useState();
+    const [companies, setCompanies] = useState([]);
     const [detailVisible, setDetailVisible] = useState(false);
+
+    const studentsData = useStudentsData(fetchWrapper);
+    const {
+        loading,
+        setLoading,
+        students,
+        filteredStudents,
+        loadStudents,
+        statusFilter,
+        setStatusFilter,
+        majorFilter,
+        setMajorFilter,
+        universityFilter,
+        setUniversityFilter,
+        periodFilter,
+        setPeriodFilter,
+        searchKeyword,
+        setSearchKeyword,
+        clearFilters: clearFiltersBase,
+    } = studentsData;
     const [rejectVisible, setRejectVisible] = useState(false);
     const [rejectTarget, setRejectTarget] = useState(null);
     const [rejectNote, setRejectNote] = useState('');
@@ -97,9 +151,7 @@ function AdminStudents() {
     const [editTarget, setEditTarget] = useState(null);
     const [editLoading, setEditLoading] = useState(false);
     const [editForm] = Form.useForm();
-    // Tìm kiếm
-    const [searchKeyword, setSearchKeyword] = useState('');
-
+    const [yearFilter, setYearFilter] = useState();
     const [periodModalOpen, setPeriodModalOpen] = useState(false);
     const [newPeriod, setNewPeriod] = useState({
         name: '',
@@ -122,91 +174,71 @@ function AdminStudents() {
         }
     }, [fetchWrapper]);
 
-    const loadMentors = useCallback(async () => {
+    const loadCompanies = useCallback(async () => {
         try {
-            const response = await fetchWrapper.get(BASE + '/mentors');
-            const data = await response.json();
+            const res = await fetchWrapper.get(BASE + '/companies');
+            const data = await res.json();
             if (data.status === 'Success') {
-                setMentors(Array.isArray(data.data) ? data.data : []);
+                setCompanies(Array.isArray(data.data) ? data.data : []);
             }
         } catch (error) {
-            setMentors([]);
+            setCompanies([]);
         }
     }, [fetchWrapper]);
 
-    // TASK 1: Parse query parameters và set filter tự động
+    // Parse URL: nếu có ?status= thì chỉ set bộ lọc (lọc client-side, không gọi API)
     useEffect(() => {
         if (userData.role !== 'admin') {
             history.replace('/');
             return;
         }
-
-        // Parse query params từ URL
         const searchParams = new URLSearchParams(location.search);
         const statusParam = searchParams.get('status');
-        
         if (statusParam) {
-            // Tự động set filter theo query param
             setStatusFilter(statusParam);
-            message.info(`Đang hiển thị: ${statusParam}`);
         }
-    }, [location.search]);
+    }, [location.search, setStatusFilter]);
 
-    // Load students khi filter thay đổi (status từ URL) hoặc khi mount
+    const loadStudentsRef = useRef(loadStudents);
+    loadStudentsRef.current = loadStudents;
     useEffect(() => {
-        if (userData.role === 'admin') {
-            loadStudents();
-        }
-    }, [statusFilter]);
+        if (userData.role !== 'admin') return;
+        loadStudentsRef.current();
+    }, [userData.role]);
 
     useEffect(() => {
         if (userData.role !== 'admin') return;
-        (async () => {
-            await Promise.all([fetchPeriods(), loadMentors()]);
-        })();
-    }, [userData.role, fetchPeriods, loadMentors]);
+        fetchPeriods();
+        loadCompanies();
+    }, [userData.role, fetchPeriods, loadCompanies]);
 
-    async function loadStudents() {
-        try {
-            setLoading(true);
-            const params = new URLSearchParams();
-            if (statusFilter) params.append('status', statusFilter);
-            if (majorFilter) params.append('major', majorFilter);
-            if (universityFilter) params.append('university', universityFilter);
-            if (periodFilter) params.append('period_id', periodFilter);
-            if (searchKeyword && searchKeyword.trim()) params.append('search', searchKeyword.trim());
-            const q = params.toString();
-            
-            // Thử gọi API mới trước, nếu lỗi thì dùng API cũ
-            try {
-                const res = await fetchWrapper.get(q ? `${BASE}/students?${q}` : `${BASE}/students`);
-                const data = await res.json();
-                if (data.status === 'Success') {
-                    setStudents(data.data || []);
-                    return;
-                }
-            } catch (e) {
-                // Fallback to old API
-            }
-            
-            // Fallback: API cũ
-            const res = await fetchWrapper.get(q ? `${BASE}/users/all?${q}` : `${BASE}/users/all`);
-            const data = await res.json();
-            if (data.status === 'Success') setStudents(data.data || []);
-        } finally {
-            setLoading(false);
-        }
-    }
+    // Danh sách năm: lấy từ hồ sơ sinh viên + danh sách đợt (kể cả những năm chưa có SV)
+    const yearOptions = useMemo(() => {
+        const set = new Set();
+        (students || []).forEach(s => {
+            const y = getStudentYear(s, periods);
+            if (y) set.add(y);
+        });
+        (periods || []).forEach(p => {
+            const d = p.startDate || p.start_date;
+            if (!d) return;
+            const year = new Date(d).getFullYear();
+            if (!Number.isNaN(year)) set.add(year);
+        });
+        return Array.from(set).sort((a, b) => b - a);
+    }, [students, periods]);
 
-    // Hàm để clear filter và update URL
+    // Lọc thêm theo năm: ưu tiên theo thời gian thực tập của sinh viên, sau đó mới đến đợt / chuỗi
+    const yearFilteredStudents = useMemo(() => {
+        if (!yearFilter) return filteredStudents;
+        const yearNum = Number(yearFilter);
+        return filteredStudents.filter(s => getStudentYear(s, periods) === yearNum);
+    }, [filteredStudents, yearFilter, periods]);
+
     function clearFilters() {
-        setStatusFilter(undefined);
-        setMajorFilter('');
-        setUniversityFilter('');
-        setPeriodFilter(undefined);
-        setSearchKeyword('');
+        clearFiltersBase();
+        setYearFilter(undefined);
         history.push('/admin/students');
-        loadStudents();
     }
 
     function openCreatePeriodModal() {
@@ -266,7 +298,7 @@ function AdminStudents() {
     function exportToCSV() {
         try {
             message.loading({ content: 'Đang xuất file CSV...', key: 'exportCSV' });
-            const csvString = arrayToCSV(students, CSV_HEADERS);
+            const csvString = arrayToCSV(yearFilteredStudents, CSV_HEADERS);
             const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -288,16 +320,14 @@ function AdminStudents() {
         if (!record) return;
         setSelectedStudent(record);
         setDetailVisible(true);
-        // Reset form with correct field names (matching the new evaluation form)
-        form.setFieldsValue({
-            internship_status: record?.status || record?.internship_status || '',
-            period_id: record?.internship_period_id || undefined,
-            mentor_feedback: record?.mentor_feedback || '',
-            report_score: record?.report_score,
-            final_grade: record?.final_grade,
-            is_completed: record?.final_status === 'Đạt' || record?.is_completed || false,
-            admin_note: record?.admin_note || '',
-        });
+        setTimeout(() => {
+            form.setFieldsValue({
+                internship_status: record.internship_status || record.status,
+                admin_note: record.admin_note,
+                period_id: record.internship_period_id,
+                company_id: record.company_id || undefined,
+            });
+        }, 0);
     }
 
     function openReject(record) {
@@ -476,69 +506,39 @@ function AdminStudents() {
         }
     }
 
-    async function assignMentor(record, mentorId) {
-        if (!mentorId) return;
+    async function assignMentor() {
+        message.info('Phân công người hướng dẫn do Quản lý Doanh nghiệp (HR) thực hiện.');
+    }
+
+    // Admin CHỈ XEM kết quả đánh giá; lưu trạng thái + ghi chú qua PUT /api/admin/students/:id
+    async function handleSaveAdminNote(values) {
+        if (!selectedStudent) return;
         try {
             setLoading(true);
-            await fetchWrapper.post(
-                `/api/user/profile/${record.student_code}`,
+            const res = await fetchWrapper.put(
+                `${BASE}/students/${selectedStudent.student_code}`,
                 'application/json',
-                { mentor_ref: mentorId }
+                {
+                    internship_status: values.internship_status,
+                    admin_note: values.admin_note,
+                    ...(values.period_id && { period_id: values.period_id }),
+                    ...(values.company_id && { company_id: values.company_id }),
+                }
             );
-            await loadStudents();
-            if (selectedStudent?._id === record._id) {
-                setSelectedStudent({ ...selectedStudent, mentor_ref: mentors.find(m => m._id === mentorId) });
-            }
+            const data = await res.json();
+            if (data.status === 'Success') {
+                message.success('Đã cập nhật trạng thái / ghi chú');
+                await loadStudents();
+                setSelectedStudent({ ...selectedStudent, ...data.data });
+            } else throw new Error(data.message);
+        } catch (error) {
+            message.error(error.message || 'Không thể lưu');
         } finally {
             setLoading(false);
         }
     }
 
-    // ========== PHASE 3: HANDLE SAVE EVALUATION (NEW API) ==========
-    async function handleSaveEvaluation(values) {
-        if (!selectedStudent) return;
-        try {
-            setLoading(true);
-            
-            // Call new Evaluation Endpoint
-            const res = await fetchWrapper.put(
-                `/api/user/${selectedStudent.student_code}/evaluation`,
-                'application/json',
-                {
-                    internship_status: values.internship_status || undefined,
-                    period_id: values.period_id || undefined,
-                    mentor_feedback: values.mentor_feedback,
-                    report_score: values.report_score,
-                    final_grade: values.final_grade,
-                    final_status: values.is_completed ? 'Đạt' : (values.final_grade !== undefined && values.final_grade < 5 ? 'Không đạt' : 'Pending'),
-                    admin_note: values.admin_note
-                }
-            );
-            
-            const data = await res.json();
-            
-            if (data.status === 'Success') {
-                notification.success({
-                    message: 'Lưu thành công',
-                    description: 'Đã cập nhật đánh giá cho sinh viên',
-                    placement: 'topRight'
-                });
-                await loadStudents();
-                setDetailVisible(false);
-                setSelectedStudent(null);
-            } else {
-                throw new Error(data.message || 'Có lỗi xảy ra');
-            }
-        } catch (error) {
-            notification.error({
-                message: 'Lỗi',
-                description: error.message || 'Không thể lưu đánh giá',
-                placement: 'topRight'
-            });
-        } finally {
-            setLoading(false);
-        }
-    }
+    // ========== HANDLE SAVE EVALUATION - Đã bỏ: chỉ Mentor mới được đánh giá ==========
 
     async function handleDelete(record) {
         try {
@@ -593,6 +593,22 @@ function AdminStudents() {
             render: (v) => v || '—'
         },
         {
+            title: 'Đơn vị TT',
+            dataIndex: 'internship_unit',
+            key: 'internship_unit',
+            ellipsis: true,
+            align: 'left',
+            render: (v) => v || '—',
+        },
+        {
+            title: 'Mentor',
+            dataIndex: 'mentor_name',
+            key: 'mentor_name',
+            width: 160,
+            align: 'left',
+            render: (v) => v || <span style={{ color: '#999' }}>Chưa gán</span>,
+        },
+        {
             title: 'Trạng thái',
             dataIndex: 'status',
             key: 'status',
@@ -621,13 +637,7 @@ function AdminStudents() {
                     >
                         Chi tiết
                     </Button>
-                    <Button 
-                        size="small" 
-                        icon={<EditOutlined />}
-                        onClick={() => openEdit(record)}
-                    >
-                        Sửa
-                    </Button>
+                    {/* Admin không sửa hồ sơ chi tiết (chỉ trạng thái + ghi chú trong Chi tiết); phân công do HR */}
                     
                     {/* Nút Duyệt - chỉ hiển thị khi status = Chờ duyệt */}
                     {record.status === 'Chờ duyệt' && (
@@ -692,84 +702,40 @@ function AdminStudents() {
                 <Breadcrumb.Item>Quản lý sinh viên</Breadcrumb.Item>
             </Breadcrumb>
 
-            <div style={{ 
-                marginBottom: 16, 
-                display: 'flex', 
-                flexWrap: 'wrap', 
-                alignItems: 'flex-end', 
-                gap: 10 
-            }}>
-                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, flex: 1, minWidth: 200 }}>
-                    <Input
-                        placeholder="Tìm theo tên, MSSV, email..."
-                        prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
-                        style={{ width: 240 }}
-                        value={searchKeyword}
-                        onChange={e => setSearchKeyword(e.target.value)}
-                        onPressEnter={() => loadStudents()}
-                        allowClear
-                    />
-                    <Select
-                        allowClear
-                        placeholder="Trạng thái"
-                        style={{ width: 150 }}
-                        value={statusFilter}
-                        onChange={(val) => {
-                            setStatusFilter(val);
-                            if (val) history.push(`/admin/students?status=${encodeURIComponent(val)}`);
-                            else history.push('/admin/students');
-                        }}
-                    >
-                        <Option value="Chờ duyệt">Chờ duyệt</Option>
-                        <Option value="Đang thực tập">Đang thực tập</Option>
-                        <Option value="Đã hoàn thành">Đã hoàn thành</Option>
-                        <Option value="Từ chối">Từ chối</Option>
-                    </Select>
-                    <Input
-                        placeholder="Trường"
-                        style={{ width: 140 }}
-                        value={universityFilter}
-                        onChange={e => setUniversityFilter(e.target.value)}
-                    />
-                    <Input
-                        placeholder="Ngành"
-                        style={{ width: 120 }}
-                        value={majorFilter}
-                        onChange={e => setMajorFilter(e.target.value)}
-                    />
-                    <Select
-                        allowClear
-                        placeholder="Đợt thực tập"
-                        style={{ width: 160 }}
-                        value={periodFilter}
-                        onChange={setPeriodFilter}
-                        notFoundContent={periods.length === 0 ? 'Chưa có đợt' : null}
-                    >
-                        {periods.map(p => (
-                            <Option key={String(p._id)} value={p._id}>{p.name || p.code || p._id}</Option>
-                        ))}
-                    </Select>
-                    <Button 
-                        type="dashed" 
-                        shape="circle" 
-                        icon={<PlusOutlined />} 
-                        onClick={openCreatePeriodModal}
-                    />
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                    {loading && <span style={{ color: '#1890ff', fontSize: 13 }}>Đang tải...</span>}
-                    <Button type="primary" onClick={loadStudents} loading={loading} disabled={loading}>Lọc</Button>
-                    <Button onClick={clearFilters} disabled={loading}>Xóa bộ lọc</Button>
-                    <Button icon={<DownloadOutlined />} onClick={exportToCSV} disabled={loading}>Xuất CSV</Button>
-                </div>
-            </div>
+            <StudentFilterBar
+                searchKeyword={searchKeyword}
+                setSearchKeyword={setSearchKeyword}
+                statusFilter={statusFilter}
+                setStatusFilter={setStatusFilter}
+                universityFilter={universityFilter}
+                setUniversityFilter={setUniversityFilter}
+                majorFilter={majorFilter}
+                setMajorFilter={setMajorFilter}
+                periodFilter={periodFilter}
+                setPeriodFilter={setPeriodFilter}
+                yearFilter={yearFilter}
+                setYearFilter={setYearFilter}
+                yearOptions={yearOptions}
+                periods={periods}
+                loading={loading}
+                loadStudents={loadStudents}
+                clearFilters={clearFilters}
+                onExportCSV={exportToCSV}
+                onOpenCreatePeriodModal={openCreatePeriodModal}
+                history={history}
+            />
 
             {/* Hiển thị filter đang active */}
-            {(statusFilter || searchKeyword?.trim()) && (
+            {(statusFilter || searchKeyword?.trim() || yearFilter) && (
                 <div style={{ marginBottom: 16, display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
                     {statusFilter && (
                         <Tag color="blue" closable onClose={() => { setStatusFilter(undefined); history.push('/admin/students'); }}>
                             Trạng thái: {statusFilter}
+                        </Tag>
+                    )}
+                    {yearFilter && (
+                        <Tag color="orange" closable onClose={() => setYearFilter(undefined)}>
+                            Năm: {yearFilter}
                         </Tag>
                     )}
                     {searchKeyword?.trim() && (
@@ -864,7 +830,7 @@ function AdminStudents() {
                 className="admin-students-table"
                 rowKey="_id"
                 columns={columns}
-                dataSource={students}
+                dataSource={yearFilteredStudents}
                 loading={loading}
                 pagination={{ pageSize: 10, showSizeChanger: true }}
                 scroll={{ x: 800 }}
@@ -1069,24 +1035,53 @@ function AdminStudents() {
                             </Row>
                         </Card>
 
-                        {/* ========== SECTION B: GRADING INPUT ========== */}
+                        {/* ========== SECTION B: KẾT QUẢ ĐÁNH GIÁ (CHỈ XEM – do Mentor nhập) ========== */}
                         <Card 
                             size="small" 
-                            title={<Text strong><CheckOutlined /> Đánh giá kết quả thực tập</Text>}
+                            title={<Text strong><CheckOutlined /> Kết quả đánh giá từ Doanh nghiệp</Text>}
+                            style={{ marginBottom: 16 }}
                         >
+                            <Row gutter={[16, 12]}>
+                                <Col xs={24}>
+                                    <Text type="secondary">Nhận xét từ Mentor:</Text>
+                                    <div style={{ marginTop: 4, padding: 8, background: '#fafafa', borderRadius: 4 }}>
+                                        {selectedStudent?.mentor_feedback || <Text type="secondary" italic>Chưa có nhận xét</Text>}
+                                    </div>
+                                </Col>
+                                <Col xs={24} md={8}>
+                                    <Text type="secondary">Điểm báo cáo:</Text>
+                                    <div><Text strong>{selectedStudent?.report_score != null ? selectedStudent.report_score : '—'}</Text></div>
+                                </Col>
+                                <Col xs={24} md={8}>
+                                    <Text type="secondary">Điểm tổng kết:</Text>
+                                    <div><Text strong>{selectedStudent?.final_grade != null ? selectedStudent.final_grade : '—'}</Text></div>
+                                </Col>
+                                <Col xs={24} md={8}>
+                                    <Text type="secondary">Kết quả:</Text>
+                                    <div>
+                                        <Tag color={selectedStudent?.final_status === 'Đạt' ? 'green' : selectedStudent?.final_status === 'Không đạt' ? 'red' : 'default'}>
+                                            {selectedStudent?.final_status || 'Chưa đánh giá'}
+                                        </Tag>
+                                    </div>
+                                </Col>
+                            </Row>
+                        </Card>
+
+                        {/* ========== SECTION C: Admin chỉ được cập nhật Trạng thái + Ghi chú + Doanh nghiệp ========== */}
+                        <Card size="small" title={<Text strong>Cập nhật trạng thái / Ghi chú / Doanh nghiệp</Text>}>
                             <Form
                                 layout="vertical"
                                 form={form}
-                                onFinish={handleSaveEvaluation}
+                                onFinish={handleSaveAdminNote}
+                                initialValues={{
+                                    internship_status: selectedStudent?.internship_status || selectedStudent?.status,
+                                    admin_note: selectedStudent?.admin_note,
+                                    period_id: selectedStudent?.internship_period_id,
+                                }}
                             >
                                 <Row gutter={16}>
-                                    {/* Trạng thái + Đợt thực tập - Có thể sửa trực tiếp */}
                                     <Col xs={24} md={12}>
-                                        <Form.Item 
-                                            label="Trạng thái thực tập" 
-                                            name="internship_status"
-                                            tooltip="Chỉnh sửa trạng thái hồ sơ sinh viên"
-                                        >
+                                        <Form.Item label="Trạng thái thực tập" name="internship_status">
                                             <Select placeholder="Chọn trạng thái" allowClear>
                                                 <Option value="Chờ duyệt">Chờ duyệt</Option>
                                                 <Option value="Đang thực tập">Đang thực tập</Option>
@@ -1096,11 +1091,21 @@ function AdminStudents() {
                                         </Form.Item>
                                     </Col>
                                     <Col xs={24} md={12}>
-                                        <Form.Item 
-                                            label="Đợt thực tập" 
-                                            name="period_id"
-                                            tooltip="Gán hoặc đổi đợt thực tập cho sinh viên"
-                                        >
+                                        <Form.Item label="Doanh nghiệp (Company)" name="company_id">
+                                            <Select
+                                                placeholder="Chọn doanh nghiệp"
+                                                allowClear
+                                                showSearch
+                                                optionFilterProp="children"
+                                            >
+                                                {companies.map(c => (
+                                                    <Option key={String(c._id)} value={c._id}>{c.name}</Option>
+                                                ))}
+                                            </Select>
+                                        </Form.Item>
+                                    </Col>
+                                    <Col xs={24} md={12}>
+                                        <Form.Item label="Đợt thực tập" name="period_id">
                                             <Select placeholder="Chọn đợt" allowClear showSearch optionFilterProp="children">
                                                 {periods.map(p => (
                                                     <Option key={String(p._id)} value={p._id}>{p.name || p.code || p._id}</Option>
@@ -1108,92 +1113,20 @@ function AdminStudents() {
                                             </Select>
                                         </Form.Item>
                                     </Col>
-                                    {/* Mentor Feedback - Renamed */}
                                     <Col xs={24}>
-                                        <Form.Item 
-                                            label="Đánh giá từ Doanh nghiệp (Mentor Feedback)" 
-                                            name="mentor_feedback"
-                                            tooltip="Nhận xét từ người hướng dẫn tại doanh nghiệp"
-                                        >
-                                            <Input.TextArea 
-                                                rows={3} 
-                                                placeholder="Nhập nhận xét từ doanh nghiệp/mentor về quá trình thực tập của sinh viên..."
-                                            />
+                                        <Form.Item label="Ghi chú giáo vụ" name="admin_note">
+                                            <Input.TextArea rows={2} placeholder="Ghi chú nội bộ..." />
                                         </Form.Item>
                                     </Col>
-                                    
-                                    {/* Report Score - Renamed */}
-                                    <Col xs={24} md={12}>
-                                        <Form.Item 
-                                            label="Điểm Báo cáo (Report Score)" 
-                                            name="report_score"
-                                            tooltip="Điểm cho báo cáo thực tập (0-10)"
-                                        >
-                                            <InputNumber 
-                                                min={0} 
-                                                max={10} 
-                                                step={0.5}
-                                                style={{ width: '100%' }} 
-                                                placeholder="0 - 10"
-                                            />
-                                        </Form.Item>
-                                    </Col>
-                                    
-                                    {/* Final Grade */}
-                                    <Col xs={24} md={12}>
-                                        <Form.Item 
-                                            label="Điểm Tổng kết (Final Grade)" 
-                                            name="final_grade"
-                                            tooltip="Điểm tổng kết cuối cùng (0-10)"
-                                        >
-                                            <InputNumber 
-                                                min={0} 
-                                                max={10} 
-                                                step={0.5}
-                                                style={{ width: '100%' }} 
-                                                placeholder="0 - 10"
-                                            />
-                                        </Form.Item>
-                                    </Col>
-                                    
-                                    {/* Admin Note */}
                                     <Col xs={24}>
-                                        <Form.Item 
-                                            label="Ghi chú từ Giáo vụ" 
-                                            name="admin_note"
-                                        >
-                                            <Input.TextArea 
-                                                rows={2} 
-                                                placeholder="Ghi chú nội bộ (sinh viên có thể thấy)..."
-                                            />
-                                        </Form.Item>
-                                    </Col>
-                                    
-                                    {/* Completion Checkbox */}
-                                    <Col xs={24}>
-                                        <Form.Item name="is_completed" valuePropName="checked">
-                                            <Checkbox>
-                                                <Text strong style={{ color: '#52c41a' }}>
-                                                    ✓ Xác nhận sinh viên ĐÃ HOÀN THÀNH thực tập (Đạt)
-                                                </Text>
-                                            </Checkbox>
+                                        <Form.Item style={{ marginBottom: 0 }}>
+                                            <Space>
+                                                <Button onClick={() => { setDetailVisible(false); setSelectedStudent(null); }}>Đóng</Button>
+                                                <Button type="primary" htmlType="submit" loading={loading}>Lưu trạng thái / Ghi chú</Button>
+                                            </Space>
                                         </Form.Item>
                                     </Col>
                                 </Row>
-                                
-                                <Divider style={{ margin: '12px 0' }} />
-                                
-                                {/* Submit Buttons */}
-                                <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}>
-                                    <Space>
-                                        <Button onClick={() => { setDetailVisible(false); setSelectedStudent(null); }}>
-                                            Hủy
-                                        </Button>
-                                        <Button type="primary" htmlType="submit" loading={loading}>
-                                            Lưu đánh giá
-                                        </Button>
-                                    </Space>
-                                </Form.Item>
                             </Form>
                         </Card>
                     </>

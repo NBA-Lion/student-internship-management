@@ -3,6 +3,34 @@ const User = require("../models/User");
 
 const JWT_SECRET = process.env.JWT_SECRET || "your-super-secret-key-change-in-production";
 
+// Tránh log spam khi MongoDB lỗi: chỉ log tối đa 1 lần mỗi 60 giây cho cùng một message
+let lastAuthErrorLog = { message: "", at: 0 };
+const AUTH_ERROR_LOG_INTERVAL_MS = 60000;
+
+function logAuthErrorOnce(error) {
+  const now = Date.now();
+  const msg = (error && error.message) || String(error);
+  if (msg !== lastAuthErrorLog.message || now - lastAuthErrorLog.at > AUTH_ERROR_LOG_INTERVAL_MS) {
+    lastAuthErrorLog = { message: msg, at: now };
+    console.error(">>> [Auth Middleware] Lỗi:", msg);
+  }
+}
+
+function isMongoConnectionError(err) {
+  if (!err || !err.message) return false;
+  const m = err.message.toLowerCase();
+  return (
+    m.includes("econnrefused") ||
+    m.includes("connection refused") ||
+    m.includes("connection closed") ||
+    m.includes("server selection") ||
+    m.includes("connect econnrefused") ||
+    m.includes("network") ||
+    err.name === "MongoNetworkError" ||
+    err.name === "MongoServerSelectionError"
+  );
+}
+
 // Generate JWT Token
 function generateToken(user) {
   return jwt.sign(
@@ -77,16 +105,21 @@ async function authMiddleware(req, res, next) {
       student_code: user.student_code,
       email: user.email,
       role: user.role,
-      full_name: user.full_name
+      full_name: user.full_name,
+      company_id: user.company_id || null
     };
 
     next();
   } catch (error) {
-    console.error(">>> [Auth Middleware] Lỗi:", error.message);
-    return res.status(500).json({ 
-      status: "Error", 
-      message: "Lỗi xác thực", 
-      error: error.message 
+    logAuthErrorOnce(error);
+    const status = isMongoConnectionError(error) ? 503 : 500;
+    const message = isMongoConnectionError(error)
+      ? "Mất kết nối cơ sở dữ liệu. Vui lòng thử lại sau hoặc kiểm tra MongoDB đã chạy."
+      : "Lỗi xác thực";
+    return res.status(status).json({
+      status: "Error",
+      message,
+      error: process.env.NODE_ENV === "development" ? error.message : undefined
     });
   }
 }

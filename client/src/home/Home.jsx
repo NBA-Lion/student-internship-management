@@ -4,7 +4,7 @@ import { useRecoilValue } from 'recoil';
 import { useEffect, useState } from 'react';
 import {
     Card, Row, Col, Tag, Spin, Button, Divider, Avatar, Statistic, 
-    Progress, Tabs, Timeline, Descriptions, Steps, Breadcrumb
+    Progress, Tabs, Timeline, Descriptions, Steps, Breadcrumb, Table
 } from 'antd';
 import {
     UserOutlined,
@@ -39,6 +39,9 @@ import { useUserActions, useProfileAction } from '_actions';
 import { profileAtom } from '_state';
 import { useFetchWrapper } from '_helpers';
 import { normalizeFileUrl } from '_helpers/Constant';
+import {
+    ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, Legend
+} from 'recharts';
 
 const { TabPane } = Tabs;
 const { Step } = Steps;
@@ -126,7 +129,7 @@ function getActivityStyle(type) {
     }
 }
 
-// ==================== CUSTOM TAB STYLES ====================
+// ==================== CUSTOM TAB STYLES (cho StudentDashboard) ====================
 const tabStyles = `
     .custom-tabs .ant-tabs-tab {
         padding: 12px 24px;
@@ -186,7 +189,7 @@ const tabStyles = `
     }
 `;
 
-// ==================== MAIN COMPONENT ====================
+// ==================== MAIN COMPONENT (RBAC) ====================
 
 function Home() {
     const profile = useRecoilValue(profileAtom);
@@ -194,7 +197,6 @@ function Home() {
     const [adminStats, setAdminStats] = useState({ pending: 0, total: 0, interning: 0, completed: 0 });
     const [recentActivities, setRecentActivities] = useState([]);
     const [activitiesLoading, setActivitiesLoading] = useState(false);
-    const [activeTab, setActiveTab] = useState("1");
     const profileAction = useProfileAction();
     const userActions = useUserActions();
     const fetchWrapper = useFetchWrapper();
@@ -242,14 +244,6 @@ function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // Inject custom styles
-    useEffect(() => {
-        const styleEl = document.createElement('style');
-        styleEl.innerHTML = tabStyles;
-        document.head.appendChild(styleEl);
-        return () => document.head.removeChild(styleEl);
-    }, []);
-
     // Lấy status từ profile hoặc userData (hỗ trợ cả 2 field name)
     const status = profile?.internship_status || profile?.registration_status || userData?.internship_status || userData?.registration_status || null;
 
@@ -261,168 +255,726 @@ function Home() {
         );
     }
 
-    // ==================== ADMIN DASHBOARD ====================
-    if (userData.role === "admin") {
+    const role = (userData.role || '').toLowerCase();
+
+    if (role === 'admin') {
         return (
-            <div className="p-4" style={{ paddingTop: 24 }}>
-                <div className="container">
-                    <Breadcrumb style={{ marginBottom: 16, fontSize: 13, color: '#8c8c8c' }}>
-                        <Breadcrumb.Item>Trang chủ</Breadcrumb.Item>
-                    </Breadcrumb>
-                    <h2 style={{ marginBottom: 8, fontSize: 20 }}>
-                        <AuditOutlined /> Bảng điều khiển Giáo vụ
-                    </h2>
-                    <p style={{ color: '#666', fontSize: 13, marginBottom: 16 }}>Quản lý và theo dõi sinh viên thực tập</p>
-                    <Divider />
-
-                    {/* Admin Stats Cards with Deep Linking */}
-                    <Row gutter={[24, 24]}>
-                        <Col xs={24} sm={12} lg={6}>
-                            <Card 
-                                hoverable
-                                style={{ 
-                                    background: 'linear-gradient(135deg, #fff7e6 0%, #ffe7ba 100%)',
-                                    borderLeft: '4px solid #faad14'
-                                }}
-                            >
-                                <Statistic
-                                    title={<span style={{ fontSize: 14 }}><ClockCircleOutlined /> Chờ duyệt</span>}
-                                    value={adminStats.pending || 0}
-                                    valueStyle={{ color: '#faad14', fontSize: 32 }}
-                                />
-                                {/* TASK 1: Deep Link với query param status=pending */}
-                                <Link to="/admin/students?status=Chờ duyệt">
-                                    <Button type="primary" size="small" style={{ marginTop: 12, background: '#faad14', borderColor: '#faad14' }}>
-                                        Duyệt ngay
-                                    </Button>
-                                </Link>
-                            </Card>
-                        </Col>
-                        <Col xs={24} sm={12} lg={6}>
-                            <Card 
-                                hoverable
-                                style={{ 
-                                    background: 'linear-gradient(135deg, #f6ffed 0%, #d9f7be 100%)',
-                                    borderLeft: '4px solid #52c41a'
-                                }}
-                            >
-                                <Statistic
-                                    title={<span style={{ fontSize: 14 }}><CheckCircleOutlined /> Đang thực tập</span>}
-                                    value={adminStats.interning || 0}
-                                    valueStyle={{ color: '#52c41a', fontSize: 32 }}
-                                />
-                                {/* TASK 1: Deep Link với query param status=interning */}
-                                <Link to="/admin/students?status=Đang thực tập">
-                                    <Button size="small" style={{ marginTop: 12 }}>
-                                        Theo dõi
-                                    </Button>
-                                </Link>
-                            </Card>
-                        </Col>
-                        <Col xs={24} sm={12} lg={6}>
-                            <Card 
-                                hoverable
-                                style={{ 
-                                    background: 'linear-gradient(135deg, #e6f7ff 0%, #bae7ff 100%)',
-                                    borderLeft: '4px solid #1890ff'
-                                }}
-                            >
-                                <Statistic
-                                    title={<span style={{ fontSize: 14 }}><TrophyOutlined /> Đã hoàn thành</span>}
-                                    value={adminStats.completed || 0}
-                                    valueStyle={{ color: '#1890ff', fontSize: 32 }}
-                                />
-                                <Link to="/admin/students?status=Đã hoàn thành">
-                                    <Button size="small" style={{ marginTop: 12 }}>
-                                        Xem kết quả
-                                    </Button>
-                                </Link>
-                            </Card>
-                        </Col>
-                        <Col xs={24} sm={12} lg={6}>
-                            <Card 
-                                hoverable
-                                style={{ 
-                                    background: 'linear-gradient(135deg, #f9f0ff 0%, #efdbff 100%)',
-                                    borderLeft: '4px solid #722ed1'
-                                }}
-                            >
-                                <Statistic
-                                    title={<span style={{ fontSize: 14 }}><TeamOutlined /> Tổng sinh viên</span>}
-                                    value={adminStats.total || 0}
-                                    valueStyle={{ color: '#722ed1', fontSize: 32 }}
-                                />
-                                <Link to="/admin/students">
-                                    <Button size="small" style={{ marginTop: 12 }}>
-                                        Xem tất cả
-                                    </Button>
-                                </Link>
-                            </Card>
-                        </Col>
-                    </Row>
-
-                    <Divider />
-
-                    {/* Recent Activities - dữ liệu thật từ API */}
-                    <h4 style={{ marginBottom: 16 }}><HistoryOutlined /> Hoạt động gần đây</h4>
-                    <Card style={{ background: '#fff', borderRadius: 12, boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }} bodyStyle={{ padding: 0 }}>
-                        {activitiesLoading ? (
-                            <div style={{ padding: 32, textAlign: 'center' }}>
-                                <Spin tip="Đang tải hoạt động..." />
-                            </div>
-                        ) : recentActivities.length === 0 ? (
-                            <div style={{ padding: 32, textAlign: 'center', color: '#8c8c8c' }}>
-                                Chưa có hoạt động nào gần đây.
-                            </div>
-                        ) : (
-                            recentActivities.map((item, idx) => {
-                                const style = getActivityStyle(item.type);
-                                return (
-                                    <div
-                                        key={item._id || idx}
-                                        style={{
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            padding: '14px 20px',
-                                            borderBottom: idx < recentActivities.length - 1 ? '1px solid #f0f0f0' : 'none',
-                                            gap: 14,
-                                        }}
-                                    >
-                                        <Avatar
-                                            size={40}
-                                            icon={style.icon}
-                                            style={{ backgroundColor: style.iconBg, color: '#1890ff', flexShrink: 0 }}
-                                        />
-                                        <div style={{ flex: 1, fontSize: 14, color: '#262626', lineHeight: 1.5 }}>
-                                            {item.actor_name && item.title.includes(item.actor_name) ? (
-                                                <>
-                                                    {item.title.split(item.actor_name)[0]}
-                                                    <strong>{item.actor_name}</strong>
-                                                    {item.title.split(item.actor_name)[1]}
-                                                </>
-                                            ) : (
-                                                item.title
-                                            )}
-                                            {item.description && (
-                                                <div style={{ fontSize: 12, color: '#8c8c8c', marginTop: 2 }}>{item.description}</div>
-                                            )}
-                                        </div>
-                                        <span style={{ fontSize: 12, color: '#8c8c8c', flexShrink: 0 }}>{formatTimeAgo(item.createdAt)}</span>
-                                    </div>
-                                );
-                            })
-                        )}
-                    </Card>
-                </div>
-            </div>
+            <AdminDashboard
+                adminStats={adminStats}
+                recentActivities={recentActivities}
+                activitiesLoading={activitiesLoading}
+            />
         );
     }
 
-    // ==================== STUDENT DASHBOARD - TABBED INTERFACE ====================
-    const statusInfo = getStatusInfo(status);
-    const user = profile || userData || {};
+    if (role === 'company_hr') {
+        return <HrDashboard user={userData} />;
+    }
 
-    // Tính progress step cho timeline
+    if (role === 'mentor') {
+        return <MentorDashboard userData={userData} />;
+    }
+
+    // Mặc định: Sinh viên (và các role khác chưa có dashboard riêng)
+    return (
+        <StudentDashboard
+            profile={profile}
+            userData={userData}
+            status={status}
+            onLogout={userActions.logout}
+        />
+    );
+}
+
+// ==================== ADMIN DASHBOARD COMPONENT ====================
+
+function AdminDashboard({ adminStats, recentActivities, activitiesLoading }) {
+    return (
+        <div className="p-4" style={{ paddingTop: 24 }}>
+            <div className="container">
+                <Breadcrumb style={{ marginBottom: 16, fontSize: 13, color: '#8c8c8c' }}>
+                    <Breadcrumb.Item>Trang chủ</Breadcrumb.Item>
+                </Breadcrumb>
+                <h2 style={{ marginBottom: 8, fontSize: 20 }}>
+                    <AuditOutlined /> Bảng điều khiển Giáo vụ
+                </h2>
+                <p style={{ color: '#666', fontSize: 13, marginBottom: 16 }}>Quản lý và theo dõi sinh viên thực tập</p>
+                <Divider />
+
+                {/* Admin Stats Cards with Deep Linking */}
+                <Row gutter={[24, 24]}>
+                    <Col xs={24} sm={12} lg={6}>
+                        <Card 
+                            hoverable
+                            style={{ 
+                                background: 'linear-gradient(135deg, #fff7e6 0%, #ffe7ba 100%)',
+                                borderLeft: '4px solid #faad14'
+                            }}
+                        >
+                            <Statistic
+                                title={<span style={{ fontSize: 14 }}><ClockCircleOutlined /> Chờ duyệt</span>}
+                                value={adminStats.pending || 0}
+                                valueStyle={{ color: '#faad14', fontSize: 32 }}
+                            />
+                            <Link to="/admin/students?status=Chờ duyệt">
+                                <Button type="primary" size="small" style={{ marginTop: 12, background: '#faad14', borderColor: '#faad14' }}>
+                                    Duyệt ngay
+                                </Button>
+                            </Link>
+                        </Card>
+                    </Col>
+                    <Col xs={24} sm={12} lg={6}>
+                        <Card 
+                            hoverable
+                            style={{ 
+                                background: 'linear-gradient(135deg, #f6ffed 0%, #d9f7be 100%)',
+                                borderLeft: '4px solid #52c41a'
+                            }}
+                        >
+                            <Statistic
+                                title={<span style={{ fontSize: 14 }}><CheckCircleOutlined /> Đang thực tập</span>}
+                                value={adminStats.interning || 0}
+                                valueStyle={{ color: '#52c41a', fontSize: 32 }}
+                            />
+                            <Link to="/admin/students?status=Đang thực tập">
+                                <Button size="small" style={{ marginTop: 12 }}>
+                                    Theo dõi
+                                </Button>
+                            </Link>
+                        </Card>
+                    </Col>
+                    <Col xs={24} sm={12} lg={6}>
+                        <Card 
+                            hoverable
+                            style={{ 
+                                background: 'linear-gradient(135deg, #e6f7ff 0%, #bae7ff 100%)',
+                                borderLeft: '4px solid #1890ff'
+                            }}
+                        >
+                            <Statistic
+                                title={<span style={{ fontSize: 14 }}><TrophyOutlined /> Đã hoàn thành</span>}
+                                value={adminStats.completed || 0}
+                                valueStyle={{ color: '#1890ff', fontSize: 32 }}
+                            />
+                            <Link to="/admin/students?status=Đã hoàn thành">
+                                <Button size="small" style={{ marginTop: 12 }}>
+                                    Xem kết quả
+                                </Button>
+                            </Link>
+                        </Card>
+                    </Col>
+                    <Col xs={24} sm={12} lg={6}>
+                        <Card 
+                            hoverable
+                            style={{ 
+                                background: 'linear-gradient(135deg, #f9f0ff 0%, #efdbff 100%)',
+                                borderLeft: '4px solid #722ed1'
+                            }}
+                        >
+                            <Statistic
+                                title={<span style={{ fontSize: 14 }}><TeamOutlined /> Tổng sinh viên</span>}
+                                value={adminStats.total || 0}
+                                valueStyle={{ color: '#722ed1', fontSize: 32 }}
+                            />
+                            <Link to="/admin/students">
+                                <Button size="small" style={{ marginTop: 12 }}>
+                                    Xem tất cả
+                                </Button>
+                            </Link>
+                        </Card>
+                    </Col>
+                </Row>
+
+                <Divider />
+
+                {/* Recent Activities - dữ liệu thật từ API */}
+                <h4 style={{ marginBottom: 16 }}><HistoryOutlined /> Hoạt động gần đây</h4>
+                <Card style={{ background: '#fff', borderRadius: 12, boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }} bodyStyle={{ padding: 0 }}>
+                    {activitiesLoading ? (
+                        <div style={{ padding: 32, textAlign: 'center' }}>
+                            <Spin tip="Đang tải hoạt động..." />
+                        </div>
+                    ) : recentActivities.length === 0 ? (
+                        <div style={{ padding: 32, textAlign: 'center', color: '#8c8c8c' }}>
+                            Chưa có hoạt động nào gần đây.
+                        </div>
+                    ) : (
+                        recentActivities.map((item, idx) => {
+                            const style = getActivityStyle(item.type);
+                            return (
+                                <div
+                                    key={item._id || idx}
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        padding: '14px 20px',
+                                        borderBottom: idx < recentActivities.length - 1 ? '1px solid #f0f0f0' : 'none',
+                                        gap: 14,
+                                    }}
+                                >
+                                    <Avatar
+                                        size={40}
+                                        icon={style.icon}
+                                        style={{ backgroundColor: style.iconBg, color: '#1890ff', flexShrink: 0 }}
+                                    />
+                                    <div style={{ flex: 1, fontSize: 14, color: '#262626', lineHeight: 1.5 }}>
+                                        {item.actor_name && item.title.includes(item.actor_name) ? (
+                                            <>
+                                                {item.title.split(item.actor_name)[0]}
+                                                <strong>{item.actor_name}</strong>
+                                                {item.title.split(item.actor_name)[1]}
+                                            </>
+                                        ) : (
+                                            item.title
+                                        )}
+                                        {item.description && (
+                                            <div style={{ fontSize: 12, color: '#8c8c8c', marginTop: 2 }}>{item.description}</div>
+                                        )}
+                                    </div>
+                                    <span style={{ fontSize: 12, color: '#8c8c8c', flexShrink: 0 }}>{formatTimeAgo(item.createdAt)}</span>
+                                </div>
+                            );
+                        })
+                    )}
+                </Card>
+            </div>
+        </div>
+    );
+}
+
+// ==================== HR DASHBOARD COMPONENT ====================
+
+function HrDashboard({ user }) {
+    const fetchWrapper = useFetchWrapper();
+    const [stats, setStats] = useState({
+        students: 0, mentors: 0, needAssign: 0, assignedCount: 0,
+        studentsByStatus: { 'Chờ duyệt': 0, 'Đang thực tập': 0, 'Đã hoàn thành': 0, 'Từ chối': 0 },
+        mentorsActive: 0, mentorsLocked: 0
+    });
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        let cancelled = false;
+        async function load() {
+            try {
+                setLoading(true);
+                const [studentsRes, mentorsRes] = await Promise.all([
+                    fetchWrapper.get('/api/company/students'),
+                    fetchWrapper.get('/api/company/mentors')
+                ]);
+                if (cancelled) return;
+                const studentsData = await studentsRes.json();
+                const mentorsData = await mentorsRes.json();
+                const students = (studentsData.status === 'Success' && studentsData.data) ? studentsData.data : [];
+                const mentors = (mentorsData.status === 'Success' && mentorsData.data) ? mentorsData.data : [];
+                const needAssign = students.filter(s => !s.mentor_id).length;
+                const assignedCount = students.filter(s => s.mentor_id).length;
+                const byStatus = { 'Chờ duyệt': 0, 'Đang thực tập': 0, 'Đã hoàn thành': 0, 'Từ chối': 0 };
+                students.forEach(s => {
+                    const st = s.internship_status || 'Chờ duyệt';
+                    if (byStatus[st] !== undefined) byStatus[st]++;
+                    else byStatus['Chờ duyệt']++;
+                });
+                const mentorsActive = mentors.filter(m => m.is_active !== false).length;
+                const mentorsLocked = mentors.filter(m => m.is_active === false).length;
+                setStats({
+                    students: students.length,
+                    mentors: mentors.length,
+                    needAssign,
+                    assignedCount,
+                    studentsByStatus: byStatus,
+                    mentorsActive,
+                    mentorsLocked
+                });
+            } catch (e) {
+                if (!cancelled) setStats({
+                    students: 0, mentors: 0, needAssign: 0, assignedCount: 0,
+                    studentsByStatus: { 'Chờ duyệt': 0, 'Đang thực tập': 0, 'Đã hoàn thành': 0, 'Từ chối': 0 },
+                    mentorsActive: 0, mentorsLocked: 0
+                });
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        }
+        load();
+        return () => { cancelled = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- load once on mount
+    }, []);
+
+    const { studentsByStatus, mentorsActive, mentorsLocked, assignedCount } = stats;
+    const STATUS_COLORS = { 'Chờ duyệt': '#faad14', 'Đang thực tập': '#52c41a', 'Đã hoàn thành': '#1890ff', 'Từ chối': '#ff4d4f' };
+    const chartStatusData = [
+        { name: 'Chờ duyệt', value: studentsByStatus['Chờ duyệt'], color: STATUS_COLORS['Chờ duyệt'] },
+        { name: 'Đang thực tập', value: studentsByStatus['Đang thực tập'], color: STATUS_COLORS['Đang thực tập'] },
+        { name: 'Đã hoàn thành', value: studentsByStatus['Đã hoàn thành'], color: STATUS_COLORS['Đã hoàn thành'] },
+        { name: 'Từ chối', value: studentsByStatus['Từ chối'], color: STATUS_COLORS['Từ chối'] },
+    ].filter(d => d.value > 0);
+    const chartAssignData = [
+        { name: 'Đã phân công', value: assignedCount, color: '#52c41a' },
+        { name: 'Chờ phân công', value: stats.needAssign, color: '#faad14' },
+    ].filter(d => d.value > 0);
+    const chartAssignDataDisplay = chartAssignData.length > 0 ? chartAssignData : [{ name: 'Chưa có SV', value: 1, color: '#d9d9d9' }];
+    const chartMentorData = [
+        { name: 'Đang hoạt động', value: mentorsActive, color: '#52c41a' },
+        { name: 'Đã khoá', value: mentorsLocked, color: '#ff4d4f' },
+    ].filter(d => d.value > 0);
+    const chartMentorDataDisplay = chartMentorData.length > 0 ? chartMentorData : [{ name: 'Chưa có Mentor', value: 1, color: '#d9d9d9' }];
+
+    return (
+        <div className="p-4" style={{ paddingTop: 24 }}>
+            <div className="container">
+                <Breadcrumb style={{ marginBottom: 16, fontSize: 13, color: '#8c8c8c' }}>
+                    <Breadcrumb.Item>Trang chủ</Breadcrumb.Item>
+                </Breadcrumb>
+
+                <h2 style={{ marginBottom: 8, fontSize: 20 }}>
+                    <TeamOutlined /> Bảng điều khiển Doanh nghiệp (HR)
+                </h2>
+                <p style={{ color: '#666', fontSize: 13, marginBottom: 16 }}>
+                    Xin chào {user?.full_name || user?.email}, đây là tổng quan dành cho Doanh nghiệp.
+                </p>
+                <Divider />
+
+                {/* Hàng 1: Tổng quan + Phân công rõ ràng */}
+                <Row gutter={[24, 24]}>
+                    <Col xs={24} md={8}>
+                        <Card hoverable>
+                            <Statistic
+                                title="Số lượng sinh viên tiếp nhận"
+                                value={loading ? '...' : stats.students}
+                                prefix={<UserOutlined />}
+                            />
+                            <Link to="/company/students">
+                                <Button type="link" style={{ marginTop: 8 }}>Xem danh sách SV &amp; gán Mentor</Button>
+                            </Link>
+                        </Card>
+                    </Col>
+                    <Col xs={24} md={8}>
+                        <Card hoverable>
+                            <Statistic
+                                title="Số lượng Mentor"
+                                value={loading ? '...' : stats.mentors}
+                                prefix={<TeamOutlined />}
+                            />
+                            <Link to="/company/students">
+                                <Button type="link" style={{ marginTop: 8 }}>Quản lý Mentor</Button>
+                            </Link>
+                        </Card>
+                    </Col>
+                    <Col xs={24} md={8}>
+                        <Card hoverable>
+                            <Statistic
+                                title="Phân công Mentor"
+                                value={loading ? '...' : `${assignedCount} / ${stats.students}`}
+                                prefix={<SolutionOutlined />}
+                            />
+                            <p style={{ marginTop: 4, marginBottom: 0, fontSize: 12, color: '#8c8c8c' }}>
+                                Đã phân công: <strong>{loading ? '...' : assignedCount}</strong> — Chờ phân công: <strong>{loading ? '...' : stats.needAssign}</strong>
+                            </p>
+                            <Link to="/company/students">
+                                <Button type="primary" style={{ marginTop: 8 }}>Phân công ngay</Button>
+                            </Link>
+                        </Card>
+                    </Col>
+                </Row>
+
+                {/* Hàng 2: Biểu đồ */}
+                <Row gutter={[24, 24]} style={{ marginTop: 24 }}>
+                    <Col xs={24} lg={8}>
+                        <Card title="Trạng thái sinh viên" size="small">
+                            {loading ? (
+                                <div style={{ height: 240, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Spin /></div>
+                            ) : chartStatusData.length === 0 ? (
+                                <div style={{ height: 240, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8c8c8c' }}>Chưa có dữ liệu</div>
+                            ) : (
+                                <ResponsiveContainer width="100%" height={240}>
+                                    <PieChart>
+                                        <Pie
+                                            data={chartStatusData}
+                                            dataKey="value"
+                                            nameKey="name"
+                                            cx="50%"
+                                            cy="50%"
+                                            outerRadius={80}
+                                            label={({ name, value }) => `${name}: ${value}`}
+                                        >
+                                            {chartStatusData.map((entry, index) => (
+                                                <Cell key={index} fill={entry.color} />
+                                            ))}
+                                        </Pie>
+                                        <Tooltip formatter={(value) => [value, 'Số SV']} />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                            )}
+                        </Card>
+                    </Col>
+                    <Col xs={24} lg={8}>
+                        <Card title="Phân công Mentor (SV)" size="small">
+                            {loading ? (
+                                <div style={{ height: 240, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Spin /></div>
+                            ) : (
+                                <ResponsiveContainer width="100%" height={240}>
+                                    <PieChart>
+                                        <Pie
+                                            data={chartAssignDataDisplay}
+                                            dataKey="value"
+                                            nameKey="name"
+                                            cx="50%"
+                                            cy="50%"
+                                            outerRadius={80}
+                                            label={({ name, value }) => (name === 'Chưa có SV' ? name : `${name}: ${value}`)}
+                                        >
+                                            {chartAssignDataDisplay.map((entry, index) => (
+                                                <Cell key={index} fill={entry.color} />
+                                            ))}
+                                        </Pie>
+                                        <Tooltip formatter={(value) => [value, 'Số SV']} />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                            )}
+                        </Card>
+                    </Col>
+                    <Col xs={24} lg={8}>
+                        <Card title="Trạng thái Mentor" size="small">
+                            {loading ? (
+                                <div style={{ height: 240, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Spin /></div>
+                            ) : (
+                                <ResponsiveContainer width="100%" height={240}>
+                                    <PieChart>
+                                        <Pie
+                                            data={chartMentorDataDisplay}
+                                            dataKey="value"
+                                            nameKey="name"
+                                            cx="50%"
+                                            cy="50%"
+                                            outerRadius={80}
+                                            label={({ name, value }) => (name === 'Chưa có Mentor' ? name : `${name}: ${value}`)}
+                                        >
+                                            {chartMentorDataDisplay.map((entry, index) => (
+                                                <Cell key={index} fill={entry.color} />
+                                            ))}
+                                        </Pie>
+                                        <Tooltip formatter={(value) => [value, 'Số Mentor']} />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                            )}
+                        </Card>
+                    </Col>
+                </Row>
+
+                {/* Bar chart: Trạng thái SV (cột) */}
+                <Row gutter={[24, 24]} style={{ marginTop: 8 }}>
+                    <Col span={24}>
+                        <Card title="Sinh viên theo trạng thái (biểu đồ ngang)" size="small">
+                            {loading ? (
+                                <div style={{ height: 260, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Spin /></div>
+                            ) : (
+                                <ResponsiveContainer width="100%" height={260}>
+                                    <BarChart
+                                        layout="vertical"
+                                        data={[
+                                            { name: 'Chờ duyệt', count: studentsByStatus['Chờ duyệt'], fill: STATUS_COLORS['Chờ duyệt'] },
+                                            { name: 'Đang thực tập', count: studentsByStatus['Đang thực tập'], fill: STATUS_COLORS['Đang thực tập'] },
+                                            { name: 'Đã hoàn thành', count: studentsByStatus['Đã hoàn thành'], fill: STATUS_COLORS['Đã hoàn thành'] },
+                                            { name: 'Từ chối', count: studentsByStatus['Từ chối'], fill: STATUS_COLORS['Từ chối'] },
+                                        ]}
+                                        margin={{ top: 16, right: 24, left: 80, bottom: 16 }}
+                                    >
+                                        <XAxis type="number" allowDecimals={false} />
+                                        <YAxis type="category" dataKey="name" width={72} />
+                                        <Tooltip />
+                                        <Bar dataKey="count" name="Số sinh viên" radius={[0, 4, 4, 0]}>
+                                            {[
+                                                { name: 'Chờ duyệt', count: studentsByStatus['Chờ duyệt'], fill: STATUS_COLORS['Chờ duyệt'] },
+                                                { name: 'Đang thực tập', count: studentsByStatus['Đang thực tập'], fill: STATUS_COLORS['Đang thực tập'] },
+                                                { name: 'Đã hoàn thành', count: studentsByStatus['Đã hoàn thành'], fill: STATUS_COLORS['Đã hoàn thành'] },
+                                                { name: 'Từ chối', count: studentsByStatus['Từ chối'], fill: STATUS_COLORS['Từ chối'] },
+                                            ].map((entry, index) => (
+                                                <Cell key={index} fill={entry.fill} />
+                                            ))}
+                                        </Bar>
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            )}
+                        </Card>
+                    </Col>
+                </Row>
+            </div>
+        </div>
+    );
+}
+
+// ==================== MENTOR DASHBOARD COMPONENT ====================
+
+function MentorDashboard({ userData }) {
+    const fetchWrapper = useFetchWrapper();
+    const [students, setStudents] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        let cancelled = false;
+        async function load() {
+            try {
+                setLoading(true);
+                const res = await fetchWrapper.get('/api/mentor/students');
+                if (cancelled) return;
+                const data = await res.json();
+                if (data.status === 'Success' && Array.isArray(data.data)) {
+                    setStudents(data.data);
+                } else {
+                    setStudents([]);
+                }
+            } catch (e) {
+                if (!cancelled) setStudents([]);
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        }
+        load();
+        return () => { cancelled = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- Chỉ load 1 lần khi mount
+    }, []);
+
+    const total = students.length;
+    const interning = students.filter(s => s.internship_status === 'Đang thực tập').length;
+    // Chưa chấm điểm: SV đã hoàn thành kỳ nhưng chưa có kết quả Đạt/Không đạt (bất kỳ final_status nào khác đều tính)
+    const needGrade = students.filter(s =>
+        String(s.internship_status || '') === 'Đã hoàn thành' &&
+        !['Đạt', 'Không đạt'].includes(String(s.final_status || '').trim())
+    ).length;
+    const pending = students.filter(s =>
+        (s.internship_status === 'Đang thực tập' || s.internship_status === 'Đã hoàn thành') &&
+        (s.final_status == null || s.final_status === '' || s.final_status === 'Pending')
+    ).length;
+    const completed = students.filter(s =>
+        s.final_status === 'Đạt' || s.final_status === 'Không đạt'
+    ).length;
+    const pendingSchool = students.filter(s => s.internship_status === 'Chờ duyệt').length;
+
+    const columns = [
+        {
+            title: 'Tên SV',
+            dataIndex: 'full_name',
+            key: 'full_name',
+            render: (text) => text || '—',
+        },
+        {
+            title: 'Mã SV',
+            dataIndex: 'student_code',
+            key: 'student_code',
+            width: 100,
+        },
+        {
+            title: 'Trường',
+            dataIndex: 'university',
+            key: 'university',
+            ellipsis: true,
+            render: (v) => v || '—',
+        },
+        {
+            title: 'Trạng thái thực tập',
+            dataIndex: 'internship_status',
+            key: 'internship_status',
+            width: 140,
+            render: (v) => {
+                const c = v === 'Đã hoàn thành' ? 'blue' : v === 'Đang thực tập' ? 'green' : v === 'Chờ duyệt' ? 'gold' : 'default';
+                return <Tag color={c}>{v || '—'}</Tag>;
+            },
+        },
+    ];
+
+    return (
+        <div className="p-4" style={{ paddingTop: 24 }}>
+            <div className="container">
+                <Breadcrumb style={{ marginBottom: 16, fontSize: 13, color: '#8c8c8c' }}>
+                    <Breadcrumb.Item>Trang chủ</Breadcrumb.Item>
+                </Breadcrumb>
+
+                <h2 style={{ marginBottom: 8, fontSize: 20 }}>
+                    <SolutionOutlined /> Bảng điều khiển Mentor
+                </h2>
+                <p style={{ color: '#666', fontSize: 13, marginBottom: 16 }}>
+                    Xin chào {userData?.full_name || userData?.email}. Quản lý sinh viên bạn đang hướng dẫn.
+                </p>
+                <Divider />
+
+                {/* Thẻ Card thống kê Mentor */}
+                <Row gutter={[24, 24]} style={{ marginBottom: 24 }}>
+                    <Col xs={24} sm={12} lg={8}>
+                        <Card
+                            hoverable
+                            style={{
+                                background: 'linear-gradient(135deg, #e6f7ff 0%, #bae7ff 100%)',
+                                borderLeft: '4px solid #1890ff',
+                            }}
+                        >
+                            <Statistic
+                                title={<span style={{ fontSize: 14 }}><TeamOutlined /> Tổng số SV đang hướng dẫn</span>}
+                                value={total}
+                                valueStyle={{ color: '#1890ff', fontSize: 28 }}
+                            />
+                            <Link to="/mentor/students">
+                                <Button type="link" size="small" style={{ marginTop: 8, padding: 0 }}>
+                                    Xem danh sách
+                                </Button>
+                            </Link>
+                        </Card>
+                    </Col>
+                    <Col xs={24} sm={12} lg={8}>
+                        <Card
+                            hoverable
+                            style={{
+                                background: 'linear-gradient(135deg, #f6ffed 0%, #d9f7be 100%)',
+                                borderLeft: '4px solid #52c41a',
+                            }}
+                        >
+                            <Statistic
+                                title={<span style={{ fontSize: 14 }}><CalendarOutlined /> Đang thực tập</span>}
+                                value={interning}
+                                valueStyle={{ color: '#52c41a', fontSize: 28 }}
+                            />
+                            <Link to="/mentor/students">
+                                <Button type="link" size="small" style={{ marginTop: 8, padding: 0 }}>
+                                    Theo dõi
+                                </Button>
+                            </Link>
+                        </Card>
+                    </Col>
+                    <Col xs={24} sm={12} lg={8}>
+                        <Card
+                            hoverable
+                            style={{
+                                background: 'linear-gradient(135deg, #fff7e6 0%, #ffe7ba 100%)',
+                                borderLeft: '4px solid #faad14',
+                            }}
+                        >
+                            <Statistic
+                                title={<span style={{ fontSize: 14 }}><ClockCircleOutlined /> Chờ đánh giá / duyệt</span>}
+                                value={pending}
+                                valueStyle={{ color: '#faad14', fontSize: 28 }}
+                            />
+                            <Link to="/mentor/students">
+                                <Button type="link" size="small" style={{ marginTop: 8, padding: 0 }}>
+                                    Vào đánh giá
+                                </Button>
+                            </Link>
+                        </Card>
+                    </Col>
+                    <Col xs={24} sm={12} lg={8}>
+                        <Card
+                            hoverable
+                            style={{
+                                background: 'linear-gradient(135deg, #fff1f0 0%, #ffccc7 100%)',
+                                borderLeft: '4px solid #ff4d4f',
+                            }}
+                        >
+                            <Statistic
+                                title={<span style={{ fontSize: 14 }}><FileTextOutlined /> Chưa chấm điểm</span>}
+                                value={needGrade}
+                                valueStyle={{ color: '#ff4d4f', fontSize: 28 }}
+                            />
+                            <span style={{ fontSize: 12, color: '#666' }}>Đã hoàn thành kỳ, chờ mentor chấm</span>
+                            <Link to="/mentor/students?need_grade=1">
+                                <Button type="link" size="small" style={{ marginTop: 8, padding: 0, display: 'block' }}>
+                                    Chấm điểm ngay
+                                </Button>
+                            </Link>
+                        </Card>
+                    </Col>
+                    <Col xs={24} sm={12} lg={8}>
+                        <Card
+                            hoverable
+                            style={{
+                                background: 'linear-gradient(135deg, #e6fffb 0%, #b5f5ec 100%)',
+                                borderLeft: '4px solid #13c2c2',
+                            }}
+                        >
+                            <Statistic
+                                title={<span style={{ fontSize: 14 }}><CheckCircleOutlined /> Đã hoàn thành</span>}
+                                value={completed}
+                                valueStyle={{ color: '#13c2c2', fontSize: 28 }}
+                            />
+                            <Link to="/mentor/students">
+                                <Button type="link" size="small" style={{ marginTop: 8, padding: 0 }}>
+                                    Xem kết quả
+                                </Button>
+                            </Link>
+                        </Card>
+                    </Col>
+                    {pendingSchool > 0 && (
+                        <Col xs={24} sm={12} lg={8}>
+                            <Card
+                                hoverable
+                                style={{
+                                    background: 'linear-gradient(135deg, #fffbe6 0%, #fff1b8 100%)',
+                                    borderLeft: '4px solid #d4b106',
+                                }}
+                            >
+                                <Statistic
+                                    title={<span style={{ fontSize: 14 }}><ExclamationCircleOutlined /> Chờ trường duyệt</span>}
+                                    value={pendingSchool}
+                                    valueStyle={{ color: '#d4b106', fontSize: 28 }}
+                                />
+                                <span style={{ fontSize: 12, color: '#666' }}>Hồ sơ SV chờ Giáo vụ duyệt</span>
+                            </Card>
+                        </Col>
+                    )}
+                </Row>
+
+                {/* Bảng danh sách sinh viên */}
+                <Card
+                    title={<><TeamOutlined /> Danh sách sinh viên tôi hướng dẫn</>}
+                    extra={
+                        <Link to="/mentor/students">
+                            <Button type="primary" size="small">Nhận xét / Chấm điểm</Button>
+                        </Link>
+                    }
+                >
+                    {loading ? (
+                        <div style={{ textAlign: 'center', padding: 40 }}>
+                            <Spin tip="Đang tải danh sách..." />
+                        </div>
+                    ) : (
+                        <Table
+                            rowKey="_id"
+                            columns={columns}
+                            dataSource={students}
+                            pagination={{ pageSize: 10 }}
+                            size="small"
+                        />
+                    )}
+                </Card>
+
+                <Divider />
+                <div style={{ textAlign: 'center' }}>
+                    <Link to="/profile">
+                        <Button type="default" icon={<UserOutlined />}>
+                            Hồ sơ cá nhân
+                        </Button>
+                    </Link>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ==================== STUDENT DASHBOARD COMPONENT ====================
+
+function StudentDashboard({ profile, userData, status, onLogout }) {
+    const [activeTab, setActiveTab] = useState("1");
+    const user = profile || userData || {};
+    const statusInfo = getStatusInfo(status);
+
+    // Inject custom styles cho Tabs
+    useEffect(() => {
+        const styleEl = document.createElement('style');
+        styleEl.innerHTML = tabStyles;
+        document.head.appendChild(styleEl);
+        return () => {
+            document.head.removeChild(styleEl);
+        };
+    }, []);
+
     const getCurrentStep = () => {
         if (!status || status === "") return 0;
         if (status === "Chờ duyệt") return 1;
@@ -461,7 +1013,7 @@ function Home() {
                     </Steps>
                 </Card>
 
-                {/* TASK 2: Tabbed Interface */}
+                {/* Tabbed Interface */}
                 <Tabs 
                     activeKey={activeTab} 
                     onChange={setActiveTab}
@@ -469,7 +1021,7 @@ function Home() {
                     type="card"
                     size="large"
                 >
-                    {/* ==================== TAB 1: Tổng quan ==================== */}
+                    {/* TAB 1: Tổng quan */}
                     <TabPane 
                         tab={<span><HomeOutlined /> Tổng quan</span>} 
                         key="1"
@@ -580,7 +1132,7 @@ function Home() {
                         </Row>
                     </TabPane>
 
-                    {/* ==================== TAB 2: Đăng ký & Hồ sơ ==================== */}
+                    {/* TAB 2: Đăng ký & Hồ sơ */}
                     <TabPane 
                         tab={<span><FormOutlined /> Đăng ký & Hồ sơ</span>} 
                         key="2"
@@ -675,7 +1227,7 @@ function Home() {
                         </Row>
                     </TabPane>
 
-                    {/* ==================== TAB 3: Kết quả chi tiết ==================== */}
+                    {/* TAB 3: Kết quả chi tiết */}
                     <TabPane 
                         tab={<span><BarChartOutlined /> Kết quả chi tiết</span>} 
                         key="3"
@@ -825,7 +1377,6 @@ function Home() {
                                 </Col>
                             </Row>
                         ) : (
-                            /* Chưa hoàn thành - hiển thị thông báo */
                             <Card>
                                 <div style={{ textAlign: 'center', padding: '60px 20px' }}>
                                     {status === "Đang thực tập" ? (
@@ -869,7 +1420,7 @@ function Home() {
                     <Button 
                         type="default" 
                         icon={<LogoutOutlined />} 
-                        onClick={userActions.logout}
+                        onClick={onLogout}
                         danger
                     >
                         Đăng xuất
