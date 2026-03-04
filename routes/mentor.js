@@ -37,6 +37,8 @@ router.get("/students", authMiddleware, mentorOnly, async (req, res) => {
       internship_unit: s.internship_unit,
       internship_topic: s.internship_topic,
       internship_status: s.internship_status,
+      internship_period: s.internship_period,
+      internship_period_id: s.internship_period_id,
       mentor_name: s.mentor_name,
       mentor_feedback: s.mentor_feedback,
       report_score: s.report_score,

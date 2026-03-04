@@ -188,9 +188,10 @@ router.get("/students", authMiddleware, adminOnly, async (req, res) => {
       }
     }
 
+    // Sắp xếp theo MSSV tăng dần: SV001, SV002, ...
     const students = await User.find(query)
       .select("-password")
-      .sort({ createdAt: -1 })
+      .sort({ student_code: 1 })
       .lean();
 
     // Sanitize: internship_period không được chứa tên người (vd: "Nguyễn Văn A")

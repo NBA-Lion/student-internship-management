@@ -50,7 +50,10 @@ const MessageSchema = new mongoose.Schema(
     editedAt: { type: Date },
 
     // Reaction: [{ emoji: String, by: String (student_code) }]
-    reactions: { type: [{ emoji: String, by: String }], default: [] }
+    reactions: { type: [{ emoji: String, by: String }], default: [] },
+
+    // Tin nhắn trả lời tự động (hệ thống gửi thay Admin/Hỗ trợ) — hiển thị "Hệ thống", không nhầm với Admin/HR/Mentor
+    is_auto_reply: { type: Boolean, default: false }
   },
   { 
     timestamps: true // createdAt, updatedAt

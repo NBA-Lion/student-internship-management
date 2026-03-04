@@ -3,6 +3,11 @@ const router = express.Router();
 const Message = require("../models/Message");
 const User = require("../models/User");
 const { authMiddleware } = require("../middleware/auth");
+const {
+  shouldSendAutoReply,
+  createAutoReplyMessage,
+  SYSTEM_DISPLAY_NAME: systemDisplayName,
+} = require("../services/autoReplyService");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
@@ -188,7 +193,9 @@ router.get("/messages/:student_code", authMiddleware, async (req, res) => {
       messageFilter = {
         $or: [
           { sender: my, receiver: { $in: adminIds } },
-          { sender: { $in: adminIds }, receiver: my }
+          { sender: { $in: adminIds }, receiver: my },
+          { sender: my, receiver: "ADMIN" },
+          { sender: "ADMIN", receiver: my }
         ]
       };
     } else {
@@ -220,11 +227,15 @@ router.get("/messages/:student_code", authMiddleware, async (req, res) => {
     const formatted = messages.map((msg) => {
       const isMine = msg.sender === my || (myRole === "admin" && (msg.sender === "ADMIN" || (adminIds && adminIds.includes(msg.sender))));
       const recalled = !!msg.deleted;
+      const isAutoReply = !!msg.is_auto_reply;
+      const fromName = isAutoReply
+        ? systemDisplayName
+        : (isMine ? (myUser?.full_name || "Tôi") : (otherUser?.full_name || "Người dùng"));
       return {
         _id: msg._id,
         message: recalled ? "Tin nhắn đã được thu hồi" : msg.message,
         content: recalled ? "Tin nhắn đã được thu hồi" : msg.message,
-        from: { vnu_id: msg.sender, name: isMine ? (myUser?.full_name || "Tôi") : (otherUser?.full_name || "Người dùng") },
+        from: { vnu_id: msg.sender, name: fromName },
         to: { vnu_id: msg.receiver, name: isMine ? (otherUser?.full_name || "Người dùng") : (myUser?.full_name || "Tôi") },
         sender: msg.sender,
         receiver: msg.receiver,
@@ -235,6 +246,7 @@ router.get("/messages/:student_code", authMiddleware, async (req, res) => {
         deleted: recalled,
         editedAt: msg.editedAt,
         reactions: msg.reactions || [],
+        is_auto_reply: isAutoReply,
         createdAt: msg.createdAt,
         createdDate: msg.createdAt,
         updatedAt: msg.updatedAt
@@ -271,8 +283,15 @@ router.post("/send-message", authMiddleware, async (req, res) => {
     if (to === my) {
       return res.status(400).json({ status: "Error", message: "Không thể gửi tin nhắn cho chính mình" });
     }
+
+    const adminIds = await User.find({ role: "admin" }).distinct("student_code");
+    let toResolved = to;
+    if (to === "ADMIN" && adminIds.length > 0) {
+      toResolved = adminIds[0];
+    }
+
     if (myRole === "company_hr" || myRole === "mentor") {
-      const allowed = await canChatWith(myRole, myCompanyId, to);
+      const allowed = await canChatWith(myRole, myCompanyId, toResolved);
       if (!allowed) {
         return res.status(403).json({ status: "Error", message: "Bạn chỉ được nhắn tin với người dùng trong nội bộ công ty mình hoặc Admin." });
       }
@@ -280,22 +299,22 @@ router.post("/send-message", authMiddleware, async (req, res) => {
 
     const newMessage = await Message.create({
       sender: my,
-      receiver: to,
+      receiver: toResolved,
       message: String(content).trim(),
       type: msgType || "text"
     });
 
     const senderUser = await User.findOne({ student_code: my }).select("student_code full_name avatar_url");
-    const receiverUser = await User.findOne({ student_code: to }).select("student_code full_name avatar_url");
+    const receiverUser = await User.findOne({ student_code: toResolved }).select("student_code full_name avatar_url");
 
     const messagePayload = {
       _id: newMessage._id,
       message: newMessage.message,
       content: newMessage.message,
       from: { vnu_id: my, id: my, name: senderUser?.full_name || "Người dùng", avatar_url: senderUser?.avatar_url || null },
-      to: { vnu_id: to, id: to, name: receiverUser?.full_name || "Người dùng", avatar_url: receiverUser?.avatar_url || null },
+      to: { vnu_id: toResolved, id: toResolved, name: receiverUser?.full_name || "Người dùng", avatar_url: receiverUser?.avatar_url || null },
       sender: my,
-      receiver: to,
+      receiver: toResolved,
       createdAt: newMessage.createdAt,
       createdDate: newMessage.createdAt,
       type: newMessage.type,
@@ -305,9 +324,42 @@ router.post("/send-message", authMiddleware, async (req, res) => {
     };
 
     const io = req.app.get("io");
+    const emitToReceiver = to === "ADMIN" ? "ADMIN" : toResolved;
     if (io) {
-      io.to(to).emit("NewMessage", { ...messagePayload, isSender: false, selfSend: false });
+      io.to(emitToReceiver).emit("NewMessage", { ...messagePayload, isSender: false, selfSend: false });
       io.to(my).emit("NewMessage", { ...messagePayload, isSender: true, selfSend: true });
+    }
+
+    // Trả lời tự động (fallback HTTP): sinh viên gửi tới bất kỳ tài khoản ADMIN nào, theo chiến lược trong autoReplyService
+    const isStudentToAdmin = myRole === "student" && adminIds.includes(toResolved);
+    if (isStudentToAdmin && adminIds.length > 0 && io) {
+      try {
+        const shouldSend = await shouldSendAutoReply({ studentCode: my, adminIds });
+        if (shouldSend) {
+          const { message: autoMsg } = await createAutoReplyMessage({
+            receiverStudentCode: my,
+            senderAdminCode: adminIds[0],
+          });
+          const autoPayload = {
+            _id: autoMsg._id,
+            message: autoMsg.message,
+            content: autoMsg.message,
+            from: { vnu_id: adminIds[0], id: adminIds[0], name: systemDisplayName, avatar_url: null },
+            to: { vnu_id: my, id: my, name: senderUser?.full_name || "Người dùng", avatar_url: senderUser?.avatar_url || null },
+            sender: adminIds[0],
+            receiver: my,
+            createdAt: autoMsg.createdAt,
+            createdDate: autoMsg.createdAt,
+            type: "text",
+            is_read: false,
+            is_auto_reply: true,
+          };
+          io.to(my).emit("NewMessage", { ...autoPayload, isSender: false, selfSend: false });
+          io.to("ADMIN").emit("NewMessage", { ...autoPayload, isSender: false, selfSend: false });
+        }
+      } catch (autoErr) {
+        console.error(">>> [Chat] send-message auto-reply failed (non-fatal):", autoErr.message);
+      }
     }
 
     return res.json({ status: "Success", data: messagePayload });
@@ -455,17 +507,36 @@ router.get("/users", authMiddleware, async (req, res) => {
     const myCompanyId = req.user.company_id || null;
     const search = req.query.search;
 
+    // Luôn loại chính mình
     let query = { student_code: { $ne: my } };
+
     if (myRole === "company_hr" || myRole === "mentor") {
+      // HR/Mentor: chỉ thấy user cùng công ty hoặc Admin (giữ nguyên logic cũ)
       if (myCompanyId) {
         query.$or = [
           { company_id: myCompanyId },
-          { role: "admin" }
+          { role: "admin" },
         ];
       } else {
         query.role = "admin";
       }
+    } else if (myRole === "student") {
+      // Sinh viên:
+      // - Nếu CHƯA được gán công ty: không hiển thị HR/Mentor nào, chỉ thấy Admin + các sinh viên khác.
+      // - Nếu ĐÃ có công ty: thấy
+      //   + toàn bộ Admin
+      //   + sinh viên khác
+      //   + HR/Mentor thuộc cùng company_id
+      if (!myCompanyId) {
+        query.role = { $in: ["student", "admin"] };
+      } else {
+        query.$or = [
+          { role: { $in: ["student", "admin"] } },
+          { role: { $in: ["company_hr", "mentor"] }, company_id: myCompanyId },
+        ];
+      }
     }
+
     if (search && String(search).trim()) {
       const escaped = String(search).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const searchCond = {
@@ -479,7 +550,11 @@ router.get("/users", authMiddleware, async (req, res) => {
     }
 
     const users = await User.find(query).select("student_code full_name email avatar_url role").limit(20);
-    const data = users.map((u) => ({
+
+    // Ẩn hoàn toàn tài khoản giảng viên (lecturer) khỏi tính năng chat
+    const visibleUsers = users.filter((u) => u.role !== "lecturer");
+
+    const data = visibleUsers.map((u) => ({
       vnu_id: u.student_code,
       student_code: u.student_code,
       name: u.full_name,

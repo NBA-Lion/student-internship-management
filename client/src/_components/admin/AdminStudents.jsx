@@ -29,6 +29,13 @@ const formatDate = (timestamp) => {
     return moment(timestamp).format(DATE_FORMAT);
 };
 
+// So sánh MSSV theo thứ tự tự nhiên: SV001, SV010, SV100...
+function compareStudentCode(a, b) {
+    const sa = (a?.student_code || '').toString();
+    const sb = (b?.student_code || '').toString();
+    return sa.localeCompare(sb, undefined, { numeric: true, sensitivity: 'base' });
+}
+
 const CSV_HEADERS = [
     { key: 'student_code', label: 'MSSV' },
     { key: 'full_name', label: 'Họ và tên' },
@@ -161,6 +168,7 @@ function AdminStudents() {
     });
     const [savingPeriod, setSavingPeriod] = useState(false);
     const [periodError, setPeriodError] = useState('');
+    const [sortAsc, setSortAsc] = useState(true); // true: SV001→SV999, false: SV999→SV001
 
     const fetchPeriods = useCallback(async () => {
         try {
@@ -234,6 +242,13 @@ function AdminStudents() {
         const yearNum = Number(yearFilter);
         return filteredStudents.filter(s => getStudentYear(s, periods) === yearNum);
     }, [filteredStudents, yearFilter, periods]);
+
+    // Sắp xếp theo MSSV tăng/giảm dần dựa trên sortAsc
+    const sortedStudents = useMemo(() => {
+        const list = Array.isArray(yearFilteredStudents) ? [...yearFilteredStudents] : [];
+        list.sort(compareStudentCode);
+        return sortAsc ? list : list.slice().reverse();
+    }, [yearFilteredStudents, sortAsc]);
 
     function clearFilters() {
         clearFiltersBase();
@@ -498,7 +513,8 @@ function AdminStudents() {
                 { status: newStatus }
             );
             message.success(`Đã cập nhật trạng thái: ${newStatus}`);
-            await loadStudents();
+            // Reload ở nền, không chặn UI
+            loadStudents();
         } catch (error) {
             message.error('Lỗi cập nhật trạng thái');
         } finally {
@@ -528,8 +544,10 @@ function AdminStudents() {
             const data = await res.json();
             if (data.status === 'Success') {
                 message.success('Đã cập nhật trạng thái / ghi chú');
-                await loadStudents();
+                // Cập nhật ngay trong modal cho cảm giác phản hồi nhanh
                 setSelectedStudent({ ...selectedStudent, ...data.data });
+                // Refresh danh sách ở nền, không chặn UI
+                loadStudents();
             } else throw new Error(data.message);
         } catch (error) {
             message.error(error.message || 'Không thể lưu');
@@ -830,9 +848,21 @@ function AdminStudents() {
                 className="admin-students-table"
                 rowKey="_id"
                 columns={columns}
-                dataSource={yearFilteredStudents}
+                dataSource={sortedStudents}
                 loading={loading}
-                pagination={{ pageSize: 10, showSizeChanger: true }}
+                pagination={{
+                    pageSize: 10,
+                    showSizeChanger: true,
+                    showTotal: () => (
+                        <Button
+                            type="default"
+                            size="small"
+                            onClick={() => setSortAsc(prev => !prev)}
+                        >
+                            {sortAsc ? 'Sắp xếp: MSSV ↓ (mới trước)' : 'Sắp xếp: MSSV ↑ (cũ trước)'}
+                        </Button>
+                    ),
+                }}
                 scroll={{ x: 800 }}
             />
 
@@ -1036,36 +1066,39 @@ function AdminStudents() {
                         </Card>
 
                         {/* ========== SECTION B: KẾT QUẢ ĐÁNH GIÁ (CHỈ XEM – do Mentor nhập) ========== */}
-                        <Card 
-                            size="small" 
-                            title={<Text strong><CheckOutlined /> Kết quả đánh giá từ Doanh nghiệp</Text>}
-                            style={{ marginBottom: 16 }}
-                        >
-                            <Row gutter={[16, 12]}>
-                                <Col xs={24}>
-                                    <Text type="secondary">Nhận xét từ Mentor:</Text>
-                                    <div style={{ marginTop: 4, padding: 8, background: '#fafafa', borderRadius: 4 }}>
-                                        {selectedStudent?.mentor_feedback || <Text type="secondary" italic>Chưa có nhận xét</Text>}
-                                    </div>
-                                </Col>
-                                <Col xs={24} md={8}>
-                                    <Text type="secondary">Điểm báo cáo:</Text>
-                                    <div><Text strong>{selectedStudent?.report_score != null ? selectedStudent.report_score : '—'}</Text></div>
-                                </Col>
-                                <Col xs={24} md={8}>
-                                    <Text type="secondary">Điểm tổng kết:</Text>
-                                    <div><Text strong>{selectedStudent?.final_grade != null ? selectedStudent.final_grade : '—'}</Text></div>
-                                </Col>
-                                <Col xs={24} md={8}>
-                                    <Text type="secondary">Kết quả:</Text>
-                                    <div>
-                                        <Tag color={selectedStudent?.final_status === 'Đạt' ? 'green' : selectedStudent?.final_status === 'Không đạt' ? 'red' : 'default'}>
-                                            {selectedStudent?.final_status || 'Chưa đánh giá'}
-                                        </Tag>
-                                    </div>
-                                </Col>
-                            </Row>
-                        </Card>
+                        {/* Theo góp ý: ẩn đánh giá DN cho tới khi sinh viên "Đã hoàn thành" */}
+                        {selectedStudent?.status === 'Đã hoàn thành' && (
+                            <Card 
+                                size="small" 
+                                title={<Text strong><CheckOutlined /> Kết quả đánh giá từ Doanh nghiệp</Text>}
+                                style={{ marginBottom: 16 }}
+                            >
+                                <Row gutter={[16, 12]}>
+                                    <Col xs={24}>
+                                        <Text type="secondary">Nhận xét từ Mentor:</Text>
+                                        <div style={{ marginTop: 4, padding: 8, background: '#fafafa', borderRadius: 4 }}>
+                                            {selectedStudent?.mentor_feedback || <Text type="secondary" italic>Chưa có nhận xét</Text>}
+                                        </div>
+                                    </Col>
+                                    <Col xs={24} md={8}>
+                                        <Text type="secondary">Điểm báo cáo:</Text>
+                                        <div><Text strong>{selectedStudent?.report_score != null ? selectedStudent.report_score : '—'}</Text></div>
+                                    </Col>
+                                    <Col xs={24} md={8}>
+                                        <Text type="secondary">Điểm tổng kết:</Text>
+                                        <div><Text strong>{selectedStudent?.final_grade != null ? selectedStudent.final_grade : '—'}</Text></div>
+                                    </Col>
+                                    <Col xs={24} md={8}>
+                                        <Text type="secondary">Kết quả:</Text>
+                                        <div>
+                                            <Tag color={selectedStudent?.final_status === 'Đạt' ? 'green' : selectedStudent?.final_status === 'Không đạt' ? 'red' : 'default'}>
+                                                {selectedStudent?.final_status || 'Chưa đánh giá'}
+                                            </Tag>
+                                        </div>
+                                    </Col>
+                                </Row>
+                            </Card>
+                        )}
 
                         {/* ========== SECTION C: Admin chỉ được cập nhật Trạng thái + Ghi chú + Doanh nghiệp ========== */}
                         <Card size="small" title={<Text strong>Cập nhật trạng thái / Ghi chú / Doanh nghiệp</Text>}>

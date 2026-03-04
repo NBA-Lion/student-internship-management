@@ -24,6 +24,12 @@
   color: #050505 !important;
 }
 
+/* Tin trả lời tự động từ Hệ thống — phân biệt với tin Admin/HR/Mentor */
+.chat-bubble-system.chat-bubble-theirs {
+  border-left: 3px solid #1890ff;
+  background: #e6f4ff !important;
+}
+
 .chat-bubble-text {
   font-size: 14px;
   line-height: 1.5;

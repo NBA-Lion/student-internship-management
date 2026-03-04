@@ -7,13 +7,7 @@
 ================================================================================
 
 
----------- 1. DANH SÁCH GIẢNG VIÊN HƯỚNG DẪN ----------
-(Cột: Mã GV, Họ tên, Email, Khoa/Viện, Username, Password, Số điện thoại)
-
-Mã GV,Họ tên,Email,Khoa/Viện,Username,Password,Số điện thoại
-GV001,Nguyễn Văn An,gv001@vnu.edu.vn,Khoa CNTT,gv001,123456,0912345001
-GV002,Trần Thị Bình,gv002@vnu.edu.vn,Viện Điện tử,gv002,123456,0912345002
-GV003,Lê Văn Cường,gv003@vnu.edu.vn,Khoa CNTT,gv003,123456,0912345003
+(ĐÃ BỎ: Hệ thống hiện tại không còn import giảng viên. Bỏ qua khối này, sử dụng từ khối 2 trở đi.)
 
 
 ---------- 2. DANH SÁCH SINH VIÊN ----------

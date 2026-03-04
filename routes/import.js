@@ -574,25 +574,8 @@ router.post("/users", authMiddleware, upload.single("file"), async (req, res) =>
           email = String(email).trim().toLowerCase();
         }
 
-        let role = row.role || targetRole;
-        
-        // CRITICAL: Prevent creating admin accounts via import
-        if (role === 'admin') {
-          console.warn(`>>> [Import] Blocked admin role assignment for: ${studentCode}`);
-          role = 'student'; // Force to student
-        }
-
-        // Auto-detect role based on student_code pattern
-        const codeUpper = codeStr.toUpperCase();
-        if (codeUpper.startsWith('SV') || codeUpper.match(/^\d{8,}$/)) {
-          role = 'student';
-        } else if (codeUpper.startsWith('GV') || codeUpper.startsWith('LEC')) {
-          role = 'lecturer';
-        }
-
-        if (!['student', 'lecturer'].includes(role)) {
-          role = 'student';
-        }
+        // Chỉ hỗ trợ import Sinh viên. Bỏ hoàn toàn vai trò giảng viên (lecturer).
+        let role = 'student';
 
         // TASK 2: Phone as string (preserve leading zeros)
         const phoneVal = row.phone;
@@ -615,18 +598,13 @@ router.post("/users", authMiddleware, upload.single("file"), async (req, res) =>
           dob: dobParsed,
         };
 
-        // Additional fields based on role
-        if (role === "lecturer") {
-          userData.department = row.department || row.faculty;
-          userData.faculty = row.department || row.faculty;
-        } else {
-          userData.university = row.university;
-          userData.faculty = row.faculty;
-          userData.major = row.major;
-          userData.class_name = row.class_name;
-          userData.parent_number = row.parent_number ? String(row.parent_number).trim() : undefined;
-          userData.address = (row.address || row.location) ? String(row.address || row.location).trim() : undefined;
-        }
+        // Additional fields cho Sinh viên
+        userData.university = row.university;
+        userData.faculty = row.faculty;
+        userData.major = row.major;
+        userData.class_name = row.class_name;
+        userData.parent_number = row.parent_number ? String(row.parent_number).trim() : undefined;
+        userData.address = (row.address || row.location) ? String(row.address || row.location).trim() : undefined;
 
         // Clean undefined / empty
         Object.keys(userData).forEach(key => {
@@ -635,10 +613,8 @@ router.post("/users", authMiddleware, upload.single("file"), async (req, res) =>
           }
         });
 
-        // Upsert operation
-        const filter = role === "lecturer" 
-          ? { email: userData.email }
-          : { student_code: userData.student_code };
+        // Upsert operation: dùng student_code làm khóa duy nhất
+        const filter = { student_code: userData.student_code };
 
         bulkOps.push({
           updateOne: {

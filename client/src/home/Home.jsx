@@ -1108,7 +1108,7 @@ function StudentDashboard({ profile, userData, status, onLogout }) {
                                     )}
 
                                     {(!status || status === "") && (
-                                        <Link to="/profile">
+                                        <Link to="/internship">
                                             <Button type="primary" block size="large" icon={<FormOutlined />}>
                                                 Đăng ký thực tập ngay
                                             </Button>
@@ -1120,7 +1120,7 @@ function StudentDashboard({ profile, userData, status, onLogout }) {
                                             <p style={{ color: '#ff4d4f', margin: 0 }}>
                                                 <strong>Lý do:</strong> {user.admin_note || "Vui lòng liên hệ Giáo vụ"}
                                             </p>
-                                            <Link to="/profile">
+                                            <Link to="/internship">
                                                 <Button type="primary" danger block style={{ marginTop: 12 }}>
                                                     Cập nhật và đăng ký lại
                                                 </Button>

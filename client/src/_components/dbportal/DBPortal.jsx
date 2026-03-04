@@ -121,52 +121,6 @@ var upload_form_student = [
 ];
 
 // ============================================
-// LECTURER (Giảng viên hướng dẫn) - Replaces Teacher/CVHT
-// ============================================
-var upload_form_lecturer = [
-  {
-    title: 'Mã GV',
-    dataIndex: 'lecturer_id',
-    key: 'lecturer_id',
-  },
-  {
-    title: 'Họ tên',
-    dataIndex: 'name',
-    key: 'name',
-  },
-  {
-    title: 'Email',
-    dataIndex: 'email',
-    key: 'email',
-  },
-  {
-    title: 'Khoa/Viện',
-    dataIndex: 'department',
-    key: 'department',
-  },
-  {
-    title: 'Username',
-    dataIndex: 'username',
-    key: 'username',
-  },
-  {
-    title: 'Password',
-    dataIndex: 'password',
-    key: 'password',
-  },
-  {
-    title: 'Số điện thoại',
-    dataIndex: 'phone_number',
-    key: 'phone_number',
-  },
-  {
-    title: 'Lỗi',
-    dataIndex: 'error',
-    key: 'error',
-  },
-];
-
-// ============================================
 // INTERNSHIP STATUS (Tình trạng thực tập)
 // ============================================
 var upload_form_status = [
@@ -205,24 +159,11 @@ function DBPortal() {
         <Breadcrumb.Item>Import dữ liệu</Breadcrumb.Item>
       </Breadcrumb>
       <p style={{ color: '#8c8c8c', marginBottom: 20, fontSize: 13 }}>
-        Import dữ liệu sinh viên, giảng viên, doanh nghiệp và đợt thực tập vào hệ thống.
+        Import dữ liệu sinh viên, doanh nghiệp và đợt thực tập vào hệ thống.
       </p>
 
-      {/* ROW 1: Lecturers, Students, Companies */}
+      {/* ROW 1: Students, Companies */}
       <Row gutter={[24, 24]} justify="center">
-        <Col flex="320px">
-          <div style={{ background: '#fafafa', padding: 16, borderRadius: 8, minHeight: 200 }}>
-            <h4>👨‍🏫 Danh sách Giảng viên hướng dẫn</h4>
-            <p style={{ color: '#888', fontSize: 13 }}>
-              Import danh sách giảng viên phụ trách hướng dẫn sinh viên thực tập.
-            </p>
-            <UploadForm 
-              columns={upload_form_lecturer} 
-              formurl={`${API_BASE}/api/import/users?role=lecturer`}
-              templateType="lecturer"
-            />
-          </div>
-        </Col>
         <Col flex="320px">
           <div style={{ background: '#fafafa', padding: 16, borderRadius: 8, minHeight: 200 }}>
             <h4>🎓 Danh sách Sinh viên</h4>

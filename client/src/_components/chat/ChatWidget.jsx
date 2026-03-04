@@ -941,6 +941,7 @@ export default function ChatWidget() {
                 : '';
             
             const deleted = !!msg.deleted;
+            const isAutoReply = !!msg.is_auto_reply;
             return {
                 id: normMessageId(msg._id),
                 text: deleted ? 'Tin nhắn đã được thu hồi' : msg.message,
@@ -949,7 +950,8 @@ export default function ChatWidget() {
                 deleted,
                 isMine,
                 senderId,
-                senderName: msg.from?.name || senderId,
+                senderName: isAutoReply ? 'Hệ thống' : (msg.from?.name || senderId),
+                is_auto_reply: isAutoReply,
                 time,
                 timestamp,
                 is_read: msg.is_read,
@@ -1044,7 +1046,7 @@ export default function ChatWidget() {
     // RENDER MESSAGE BUBBLE
     // ============================================
     const renderMessageBubble = (msg, idx, messages) => {
-        const { isMine, text, time, id, type, attachment_url, editedAt, deleted } = msg;
+        const { isMine, text, time, id, type, attachment_url, editedAt, deleted, is_auto_reply: isAutoReply, senderName } = msg;
         const isRecalled = deleted === true || type === 'recalled';
         const displayText = isRecalled ? (text && text.trim()) || 'Tin nhắn đã được thu hồi' : (text || '');
         const prevMsg = messages[idx - 1];
@@ -1069,7 +1071,7 @@ export default function ChatWidget() {
 
         const fileUrl = attachment_url ? `${API_BASE}${attachment_url}` : null;
         const msgId = id || '';
-        const showMessageOptions = !isRecalled; // Tin của mình: Sửa + Thu hồi; tin người khác: Xóa với tôi
+        const showMessageOptions = !isRecalled && !isAutoReply; // Tin hệ thống (auto-reply): không sửa/thu hồi/xóa
         const isOptionsOpen = messageOptionsId === msgId;
         const isTextEditable = type !== 'image' && type !== 'file';
         const isEditing = editingMessageId === msgId;
@@ -1077,6 +1079,11 @@ export default function ChatWidget() {
 
         const bubbleContent = (
             <>
+                {isAutoReply && !isMine && (
+                    <div className="chat-bubble-system-label" style={{ fontSize: 11, color: '#8c8c8c', marginBottom: 2 }}>
+                        {senderName || 'Hệ thống'}
+                    </div>
+                )}
                 {isEditing && isTextEditable ? (
                     <div className="chat-bubble chat-bubble-mine chat-edit-inline" style={{ maxWidth: '85%', padding: '10px 12px', borderRadius: 18 }}>
                         <Input.TextArea
@@ -1110,7 +1117,7 @@ export default function ChatWidget() {
                             <div className="chat-edited-label chat-edited-label--above">Đã chỉnh sửa</div>
                         )}
                         <div
-                            className={`chat-bubble ${isMine ? 'chat-bubble-mine' : 'chat-bubble-theirs'} ${isRecalled ? 'chat-bubble-recalled' : ''}`}
+                            className={`chat-bubble ${isMine ? 'chat-bubble-mine' : 'chat-bubble-theirs'} ${isRecalled ? 'chat-bubble-recalled' : ''} ${isAutoReply ? 'chat-bubble-system' : ''}`}
                             style={{
                                 maxWidth: '75%',
                                 minWidth: 80,
@@ -1293,13 +1300,17 @@ export default function ChatWidget() {
                     <div style={{ flex: 1, marginLeft: 12, overflow: 'hidden', minWidth: 0 }}>
                         <div style={{ fontWeight: unread > 0 ? 700 : 600, fontSize: 14, display: 'flex', alignItems: 'center' }}>
                             {name}
-                                        {partner.role && (
-                                            <span style={{ fontSize: 11, color: '#8c8c8c', fontWeight: 400, marginLeft: 6 }}>
-                                                ({partner.role === 'admin' ? 'Admin' : 
-                                                  partner.role === 'lecturer' ? 'GV' : 
-                                                  partner.role === 'teacher' ? 'GV' : 'SV'})
-                                            </span>
-                                        )}
+                            {partner.role && (
+                                <span style={{ fontSize: 11, color: '#8c8c8c', fontWeight: 400, marginLeft: 6 }}>
+                                    ({partner.role === 'admin'
+                                        ? 'Admin'
+                                        : partner.role === 'company_hr'
+                                            ? 'HR'
+                                            : partner.role === 'mentor'
+                                                ? 'Mentor'
+                                                : 'SV'})
+                                </span>
+                            )}
                         </div>
                         <div style={{ color: unread > 0 ? '#050505' : '#65676b', fontSize: 13, fontWeight: unread > 0 ? 600 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {description}

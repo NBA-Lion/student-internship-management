@@ -48,7 +48,6 @@ Test/
 | Method | Endpoint | Mô tả |
 |--------|----------|-------|
 | POST | `/api/import/users?role=student` | Import sinh viên |
-| POST | `/api/import/users?role=lecturer` | Import giảng viên |
 | POST | `/api/import/companies` | Import doanh nghiệp |
 | POST | `/api/import/batches` | Import đợt thực tập |
 | POST | `/api/import/grades` | Import kết quả |

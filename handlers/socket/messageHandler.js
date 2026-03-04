@@ -1,8 +1,14 @@
 /**
  * Socket: xử lý tin nhắn (NewMessage, delete_message, MarkAsRead)
+ * + Trả lời tự động khi sinh viên nhắn tới Admin/Hỗ trợ (chiến lược cấu hình trong autoReplyService).
  */
 const User = require("../../models/User");
 const Message = require("../../models/Message");
+const {
+  shouldSendAutoReply,
+  createAutoReplyMessage,
+  SYSTEM_DISPLAY_NAME,
+} = require("../../services/autoReplyService");
 
 function registerMessageHandler(io, socket, userId) {
   socket.on("NewMessage", async (data) => {
@@ -19,10 +25,17 @@ function registerMessageHandler(io, socket, userId) {
         return;
       }
 
+      // Resolve ADMIN và lấy danh sách tất cả admin để nhận diện kênh hỗ trợ
+      const adminIds = await User.find({ role: "admin" }).distinct("student_code");
+      let toResolved = to;
+      if (to === "ADMIN" && adminIds.length > 0) {
+        toResolved = adminIds[0];
+      }
+
       const senderDoc = await User.findOne({ student_code: from }).select("role company_id").lean();
       const senderRole = (senderDoc?.role || "").toLowerCase();
       if (senderRole === "company_hr" || senderRole === "mentor") {
-        const receiverUser = await User.findOne({ student_code: to }).select("role company_id").lean();
+        const receiverUser = await User.findOne({ student_code: toResolved }).select("role company_id").lean();
         if (!receiverUser) {
           socket.emit("MessageError", { message: "Người nhận không tồn tại." });
           return;
@@ -45,7 +58,7 @@ function registerMessageHandler(io, socket, userId) {
       try {
         savedMessage = await Message.create({
           sender: from,
-          receiver: to,
+          receiver: toResolved,
           message: messageContent,
           type: msgType === "image" || msgType === "file" ? msgType : "text",
         });
@@ -62,11 +75,11 @@ function registerMessageHandler(io, socket, userId) {
       }
 
       const senderUser = await User.findOne({ student_code: from }).select("student_code full_name avatar_url");
-      const receiverUser = await User.findOne({ student_code: to }).select("student_code full_name avatar_url");
+      const receiverUser = await User.findOne({ student_code: toResolved }).select("student_code full_name avatar_url");
       const previousCount = await Message.countDocuments({
         $or: [
-          { sender: from, receiver: to },
-          { sender: to, receiver: from },
+          { sender: from, receiver: toResolved },
+          { sender: toResolved, receiver: from },
         ],
         _id: { $ne: savedMessage._id },
       });
@@ -83,13 +96,13 @@ function registerMessageHandler(io, socket, userId) {
           avatar_url: senderUser?.avatar_url || null,
         },
         to: {
-          vnu_id: to,
-          id: to,
+          vnu_id: toResolved,
+          id: toResolved,
           name: receiverUser?.full_name || "Người dùng",
           avatar_url: receiverUser?.avatar_url || null,
         },
         sender: from,
-        receiver: to,
+        receiver: toResolved,
         createdAt: savedMessage.createdAt,
         createdDate: savedMessage.createdAt,
         timestamp: savedMessage.createdAt,
@@ -98,9 +111,51 @@ function registerMessageHandler(io, socket, userId) {
         newContact: isNewContact,
       };
 
-      io.to(to).emit("NewMessage", { ...messagePayload, isSender: false, selfSend: false });
+      // Emit tới room đúng: nếu gửi tới ADMIN thì emit room "ADMIN" và room admin cụ thể
+      const emitToReceiver = to === "ADMIN" ? "ADMIN" : toResolved;
+      io.to(emitToReceiver).emit("NewMessage", { ...messagePayload, isSender: false, selfSend: false });
       socket.emit("NewMessage", { ...messagePayload, isSender: true, selfSend: true });
-      console.log(`>>> [Socket] Message saved & emitted: ${from} -> ${to} | _id: ${savedMessage._id}`);
+      console.log(`>>> [Socket] Message saved & emitted: ${from} -> ${toResolved} | _id: ${savedMessage._id}`);
+
+      // --- Trả lời tự động: chỉ khi sinh viên nhắn tới bất kỳ tài khoản ADMIN nào / kênh ADMIN ---
+      const isStudentToAdmin = senderRole === "student" && adminIds.includes(toResolved);
+      if (isStudentToAdmin && adminIds.length > 0) {
+        try {
+          const shouldSend = await shouldSendAutoReply({ studentCode: from, adminIds });
+          if (shouldSend) {
+            const { message: autoMsg } = await createAutoReplyMessage({
+              receiverStudentCode: from,
+              senderAdminCode: adminIds[0],
+            });
+            const autoPayload = {
+              _id: autoMsg._id,
+              message: autoMsg.message,
+              content: autoMsg.message,
+              from: {
+                vnu_id: adminIds[0],
+                id: adminIds[0],
+                name: SYSTEM_DISPLAY_NAME,
+                avatar_url: null,
+              },
+              to: { vnu_id: from, id: from, name: senderUser?.full_name || "Người dùng", avatar_url: senderUser?.avatar_url || null },
+              sender: adminIds[0],
+              receiver: from,
+              createdAt: autoMsg.createdAt,
+              createdDate: autoMsg.createdAt,
+              timestamp: autoMsg.createdAt,
+              type: "text",
+              is_read: false,
+              is_auto_reply: true,
+            };
+            io.to(from).emit("NewMessage", { ...autoPayload, isSender: false, selfSend: false });
+            io.to("ADMIN").emit("NewMessage", { ...autoPayload, isSender: false, selfSend: false });
+            console.log(`>>> [Socket] Auto-reply sent to student ${from} | _id: ${autoMsg._id}`);
+          }
+        } catch (autoErr) {
+          console.error(">>> [Socket] Auto-reply failed (non-fatal):", autoErr.message);
+          // Không emit MessageError cho user — tin của họ đã gửi thành công
+        }
+      }
     } catch (e) {
       console.error(">>> [Socket] Error in NewMessage handler:", e.message);
       socket.emit("MessageError", { message: "Lỗi gửi tin nhắn: " + e.message });
