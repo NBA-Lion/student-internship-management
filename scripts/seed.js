@@ -207,6 +207,17 @@ async function seed() {
         }
       }
 
+      // Tạo doanh nghiệp mẫu (để màn Doanh nghiệp & HR không trống khi mới deploy)
+      for (const companyData of sampleCompanies) {
+        const existing = await Company.findOne({ name: companyData.name });
+        if (!existing) {
+          await Company.create(companyData);
+          console.log(`  ✅ Tạo doanh nghiệp: ${companyData.name}`);
+        } else {
+          console.log(`  ⏭️ Doanh nghiệp đã tồn tại: ${companyData.name}`);
+        }
+      }
+
       console.log('\n🎉 Seed dữ liệu thành công!');
     } else if (!hasAdmin) {
       console.log('\n✅ Đã tạo tài khoản ADMIN (database đã có user khác).');
