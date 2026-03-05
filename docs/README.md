@@ -2,12 +2,15 @@
 
 Hệ thống Quản lý Sinh viên Thực tập — hướng dẫn cài đặt, chạy và deploy.
 
+**Deploy nhanh:** [06-deploy-cac-buoc-co-ban.md](./06-deploy-cac-buoc-co-ban.md) (các bước tóm tắt — Cloud + Windows server).
+
 ---
 
 ## Mục lục
 
 | # | File | Nội dung |
 |---|------|----------|
+| 0 | [06-deploy-cac-buoc-co-ban.md](./06-deploy-cac-buoc-co-ban.md) | **Deploy:** các bước nhanh (Cloud + Windows) |
 | 1 | [01-cai-dat.md](./01-cai-dat.md) | Yêu cầu hệ thống, clone, cài đặt, MongoDB |
 | 2 | [02-chay-ung-dung.md](./02-chay-ung-dung.md) | Chạy app, seed, tài khoản mặc định |
 | 3 | [03-cau-truc-api.md](./03-cau-truc-api.md) | Cấu trúc thư mục, API endpoints |
