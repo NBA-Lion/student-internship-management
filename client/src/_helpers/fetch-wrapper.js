@@ -142,9 +142,13 @@ function useFetchWrapper() {
         if (!API_BASE_CLEAN) {
             return url;
         }
-        if (url.startsWith('/')) {
-            return `${API_BASE_CLEAN}${url}`;
+        // Khi chạy sau reverse proxy (Nginx) thì giữ các path "/api", "/auth", ...
+        // để request đi qua cùng origin (tránh gọi thẳng backend/private IP gây lỗi CORS/HTML).
+        const sameOriginPrefixes = ['/api', '/auth', '/admin', '/uploads', '/socket.io', '/health'];
+        if (sameOriginPrefixes.some((p) => url.startsWith(p))) {
+            return url;
         }
+        if (url.startsWith('/')) return `${API_BASE_CLEAN}${url}`;
         return `${API_BASE_CLEAN}/${url}`;
     }
 }

@@ -106,6 +106,15 @@ curl -I http://127.0.0.1/api/routes
 | 502 Bad Gateway | PM2 không chạy :3000 / :5000 hoặc sai port trong `proxy_pass`. |
 | Vào được web nhưng login lỗi | Kiểm tra `FRONTEND_URL`, CORS, và `REACT_APP_*` trong bản build. |
 | Chat/socket lỗi | Kiểm tra location `/socket.io/` và firewall. |
+| **“Nhận được HTML thay vì JSON”** / `/api/` trả trang React | **Host** trình duyệt (vd `pmqltt.kit.vn`) **phải có trong** `server_name` của block `server` đang có `location /api/`. Nếu thiếu, Nginx dùng **server mặc định** khác → chỉ có `location /` → proxy hết sang :3000 → API trả `index.html`. Sửa: thêm domain vào `server_name`, `nginx -t`, `nginx -s reload`. Đồng bộ `REACT_APP_BACKEND_URL` / `client/.env` với **đúng domain** user mở. |
+
+### Kiểm tra nhanh API qua đúng Host (trên server)
+
+```bat
+curl -s -X POST "http://127.0.0.1/api/auth/login" -H "Host: TEN_DOMAIN_CUA_BAN" -H "Content-Type: application/json" -d "{\"student_code\":\"ADMIN\",\"password\":\"123\"}"
+```
+
+Nếu dòng đầu body là `{` (JSON): OK. Nếu ra `<!DOCTYPE` hoặc `<html`: Nginx chưa khớp `server_name` với `Host` đó hoặc thiếu `location /api/`.
 
 ---
 

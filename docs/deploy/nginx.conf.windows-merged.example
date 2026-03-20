@@ -21,7 +21,8 @@ http {
 
     server {
         listen       80;
-        server_name  pmqltt.lcit.vn;
+        # Thêm mọi domain trỏ về máy này (nếu thiếu, Host khác sẽ rơi vào server mặc định → /api trả HTML)
+        server_name  pmqltt.lcit.vn pmqltt.kit.vn;
 
         client_max_body_size 50M;
 
