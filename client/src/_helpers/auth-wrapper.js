@@ -56,11 +56,19 @@ function useAuthWrapper() {
             return { status: "Error", data: "Phản hồi không hợp lệ" };
         }
 
+        if (rawjson == null || typeof rawjson !== "object") {
+            setAlert({
+                message: "Lỗi",
+                description: "Máy chủ trả về dữ liệu trống hoặc không đúng định dạng. Kiểm tra backend /api/auth/login.",
+            });
+            return { status: "Error", data: "Phản hồi không hợp lệ" };
+        }
+
         if (rawjson.requires2FA && rawjson.tempToken) {
             return { status: "Requires2FA", tempToken: rawjson.tempToken, message: rawjson.message };
         }
 
-        const { user, token } = rawjson || {};
+        const { user, token } = rawjson;
 
         if (user && token) {
             setLoginToken(token);

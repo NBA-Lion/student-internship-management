@@ -36,8 +36,9 @@ function useUserActions () {
             if (response.status === "RequireCaptcha") {
                 return response;
             }
+            // Không throw: authWrapper.login đã setAlert cho các lỗi — throw sẽ làm catch setAlert lần nữa (toast trùng)
             if (response.status !== "Success") {
-                throw new Error(response.data || "Đăng nhập thất bại");
+                return response;
             }
 
             const { from } =
@@ -48,7 +49,7 @@ function useUserActions () {
         } catch (e) {
             setAlert({
                 message: "Lỗi",
-                description: (response && response.data) || e.message || "Đăng nhập thất bại",
+                description: e.message || "Đăng nhập thất bại",
             });
             return response;
         }

@@ -289,158 +289,158 @@ function Home() {
 // ==================== ADMIN DASHBOARD COMPONENT ====================
 
 function AdminDashboard({ adminStats, recentActivities, activitiesLoading }) {
-    return (
-        <div className="p-4" style={{ paddingTop: 24 }}>
-            <div className="container">
-                <Breadcrumb style={{ marginBottom: 16, fontSize: 13, color: '#8c8c8c' }}>
-                    <Breadcrumb.Item>Trang chủ</Breadcrumb.Item>
-                </Breadcrumb>
-                <h2 style={{ marginBottom: 8, fontSize: 20 }}>
-                    <AuditOutlined /> Bảng điều khiển Giáo vụ
-                </h2>
-                <p style={{ color: '#666', fontSize: 13, marginBottom: 16 }}>Quản lý và theo dõi sinh viên thực tập</p>
-                <Divider />
+        return (
+            <div className="p-4" style={{ paddingTop: 24 }}>
+                <div className="container">
+                    <Breadcrumb style={{ marginBottom: 16, fontSize: 13, color: '#8c8c8c' }}>
+                        <Breadcrumb.Item>Trang chủ</Breadcrumb.Item>
+                    </Breadcrumb>
+                    <h2 style={{ marginBottom: 8, fontSize: 20 }}>
+                        <AuditOutlined /> Bảng điều khiển Giáo vụ
+                    </h2>
+                    <p style={{ color: '#666', fontSize: 13, marginBottom: 16 }}>Quản lý và theo dõi sinh viên thực tập</p>
+                    <Divider />
 
-                {/* Admin Stats Cards with Deep Linking */}
-                <Row gutter={[24, 24]}>
-                    <Col xs={24} sm={12} lg={6}>
-                        <Card 
-                            hoverable
-                            style={{ 
-                                background: 'linear-gradient(135deg, #fff7e6 0%, #ffe7ba 100%)',
-                                borderLeft: '4px solid #faad14'
-                            }}
-                        >
-                            <Statistic
-                                title={<span style={{ fontSize: 14 }}><ClockCircleOutlined /> Chờ duyệt</span>}
-                                value={adminStats.pending || 0}
-                                valueStyle={{ color: '#faad14', fontSize: 32 }}
-                            />
-                            <Link to="/admin/students?status=Chờ duyệt">
-                                <Button type="primary" size="small" style={{ marginTop: 12, background: '#faad14', borderColor: '#faad14' }}>
-                                    Duyệt ngay
-                                </Button>
-                            </Link>
-                        </Card>
-                    </Col>
-                    <Col xs={24} sm={12} lg={6}>
-                        <Card 
-                            hoverable
-                            style={{ 
-                                background: 'linear-gradient(135deg, #f6ffed 0%, #d9f7be 100%)',
-                                borderLeft: '4px solid #52c41a'
-                            }}
-                        >
-                            <Statistic
-                                title={<span style={{ fontSize: 14 }}><CheckCircleOutlined /> Đang thực tập</span>}
-                                value={adminStats.interning || 0}
-                                valueStyle={{ color: '#52c41a', fontSize: 32 }}
-                            />
-                            <Link to="/admin/students?status=Đang thực tập">
-                                <Button size="small" style={{ marginTop: 12 }}>
-                                    Theo dõi
-                                </Button>
-                            </Link>
-                        </Card>
-                    </Col>
-                    <Col xs={24} sm={12} lg={6}>
-                        <Card 
-                            hoverable
-                            style={{ 
-                                background: 'linear-gradient(135deg, #e6f7ff 0%, #bae7ff 100%)',
-                                borderLeft: '4px solid #1890ff'
-                            }}
-                        >
-                            <Statistic
-                                title={<span style={{ fontSize: 14 }}><TrophyOutlined /> Đã hoàn thành</span>}
-                                value={adminStats.completed || 0}
-                                valueStyle={{ color: '#1890ff', fontSize: 32 }}
-                            />
-                            <Link to="/admin/students?status=Đã hoàn thành">
-                                <Button size="small" style={{ marginTop: 12 }}>
-                                    Xem kết quả
-                                </Button>
-                            </Link>
-                        </Card>
-                    </Col>
-                    <Col xs={24} sm={12} lg={6}>
-                        <Card 
-                            hoverable
-                            style={{ 
-                                background: 'linear-gradient(135deg, #f9f0ff 0%, #efdbff 100%)',
-                                borderLeft: '4px solid #722ed1'
-                            }}
-                        >
-                            <Statistic
-                                title={<span style={{ fontSize: 14 }}><TeamOutlined /> Tổng sinh viên</span>}
-                                value={adminStats.total || 0}
-                                valueStyle={{ color: '#722ed1', fontSize: 32 }}
-                            />
-                            <Link to="/admin/students">
-                                <Button size="small" style={{ marginTop: 12 }}>
-                                    Xem tất cả
-                                </Button>
-                            </Link>
-                        </Card>
-                    </Col>
-                </Row>
+                    {/* Admin Stats Cards with Deep Linking */}
+                    <Row gutter={[24, 24]}>
+                        <Col xs={24} sm={12} lg={6}>
+                            <Card 
+                                hoverable
+                                style={{ 
+                                    background: 'linear-gradient(135deg, #fff7e6 0%, #ffe7ba 100%)',
+                                    borderLeft: '4px solid #faad14'
+                                }}
+                            >
+                                <Statistic
+                                    title={<span style={{ fontSize: 14 }}><ClockCircleOutlined /> Chờ duyệt</span>}
+                                    value={adminStats.pending || 0}
+                                    valueStyle={{ color: '#faad14', fontSize: 32 }}
+                                />
+                                <Link to="/admin/students?status=Chờ duyệt">
+                                    <Button type="primary" size="small" style={{ marginTop: 12, background: '#faad14', borderColor: '#faad14' }}>
+                                        Duyệt ngay
+                                    </Button>
+                                </Link>
+                            </Card>
+                        </Col>
+                        <Col xs={24} sm={12} lg={6}>
+                            <Card 
+                                hoverable
+                                style={{ 
+                                    background: 'linear-gradient(135deg, #f6ffed 0%, #d9f7be 100%)',
+                                    borderLeft: '4px solid #52c41a'
+                                }}
+                            >
+                                <Statistic
+                                    title={<span style={{ fontSize: 14 }}><CheckCircleOutlined /> Đang thực tập</span>}
+                                    value={adminStats.interning || 0}
+                                    valueStyle={{ color: '#52c41a', fontSize: 32 }}
+                                />
+                                <Link to="/admin/students?status=Đang thực tập">
+                                    <Button size="small" style={{ marginTop: 12 }}>
+                                        Theo dõi
+                                    </Button>
+                                </Link>
+                            </Card>
+                        </Col>
+                        <Col xs={24} sm={12} lg={6}>
+                            <Card 
+                                hoverable
+                                style={{ 
+                                    background: 'linear-gradient(135deg, #e6f7ff 0%, #bae7ff 100%)',
+                                    borderLeft: '4px solid #1890ff'
+                                }}
+                            >
+                                <Statistic
+                                    title={<span style={{ fontSize: 14 }}><TrophyOutlined /> Đã hoàn thành</span>}
+                                    value={adminStats.completed || 0}
+                                    valueStyle={{ color: '#1890ff', fontSize: 32 }}
+                                />
+                                <Link to="/admin/students?status=Đã hoàn thành">
+                                    <Button size="small" style={{ marginTop: 12 }}>
+                                        Xem kết quả
+                                    </Button>
+                                </Link>
+                            </Card>
+                        </Col>
+                        <Col xs={24} sm={12} lg={6}>
+                            <Card 
+                                hoverable
+                                style={{ 
+                                    background: 'linear-gradient(135deg, #f9f0ff 0%, #efdbff 100%)',
+                                    borderLeft: '4px solid #722ed1'
+                                }}
+                            >
+                                <Statistic
+                                    title={<span style={{ fontSize: 14 }}><TeamOutlined /> Tổng sinh viên</span>}
+                                    value={adminStats.total || 0}
+                                    valueStyle={{ color: '#722ed1', fontSize: 32 }}
+                                />
+                                <Link to="/admin/students">
+                                    <Button size="small" style={{ marginTop: 12 }}>
+                                        Xem tất cả
+                                    </Button>
+                                </Link>
+                            </Card>
+                        </Col>
+                    </Row>
 
-                <Divider />
+                    <Divider />
 
-                {/* Recent Activities - dữ liệu thật từ API */}
-                <h4 style={{ marginBottom: 16 }}><HistoryOutlined /> Hoạt động gần đây</h4>
-                <Card style={{ background: '#fff', borderRadius: 12, boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }} bodyStyle={{ padding: 0 }}>
-                    {activitiesLoading ? (
-                        <div style={{ padding: 32, textAlign: 'center' }}>
-                            <Spin tip="Đang tải hoạt động..." />
-                        </div>
-                    ) : recentActivities.length === 0 ? (
-                        <div style={{ padding: 32, textAlign: 'center', color: '#8c8c8c' }}>
-                            Chưa có hoạt động nào gần đây.
-                        </div>
-                    ) : (
-                        recentActivities.map((item, idx) => {
-                            const style = getActivityStyle(item.type);
-                            return (
-                                <div
-                                    key={item._id || idx}
-                                    style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        padding: '14px 20px',
-                                        borderBottom: idx < recentActivities.length - 1 ? '1px solid #f0f0f0' : 'none',
-                                        gap: 14,
-                                    }}
-                                >
-                                    <Avatar
-                                        size={40}
-                                        icon={style.icon}
-                                        style={{ backgroundColor: style.iconBg, color: '#1890ff', flexShrink: 0 }}
-                                    />
-                                    <div style={{ flex: 1, fontSize: 14, color: '#262626', lineHeight: 1.5 }}>
-                                        {item.actor_name && item.title.includes(item.actor_name) ? (
-                                            <>
-                                                {item.title.split(item.actor_name)[0]}
-                                                <strong>{item.actor_name}</strong>
-                                                {item.title.split(item.actor_name)[1]}
-                                            </>
-                                        ) : (
-                                            item.title
-                                        )}
-                                        {item.description && (
-                                            <div style={{ fontSize: 12, color: '#8c8c8c', marginTop: 2 }}>{item.description}</div>
-                                        )}
+                    {/* Recent Activities - dữ liệu thật từ API */}
+                    <h4 style={{ marginBottom: 16 }}><HistoryOutlined /> Hoạt động gần đây</h4>
+                    <Card style={{ background: '#fff', borderRadius: 12, boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }} bodyStyle={{ padding: 0 }}>
+                        {activitiesLoading ? (
+                            <div style={{ padding: 32, textAlign: 'center' }}>
+                                <Spin tip="Đang tải hoạt động..." />
+                            </div>
+                        ) : recentActivities.length === 0 ? (
+                            <div style={{ padding: 32, textAlign: 'center', color: '#8c8c8c' }}>
+                                Chưa có hoạt động nào gần đây.
+                            </div>
+                        ) : (
+                            recentActivities.map((item, idx) => {
+                                const style = getActivityStyle(item.type);
+                                return (
+                                    <div
+                                        key={item._id || idx}
+                                        style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            padding: '14px 20px',
+                                            borderBottom: idx < recentActivities.length - 1 ? '1px solid #f0f0f0' : 'none',
+                                            gap: 14,
+                                        }}
+                                    >
+                                        <Avatar
+                                            size={40}
+                                            icon={style.icon}
+                                            style={{ backgroundColor: style.iconBg, color: '#1890ff', flexShrink: 0 }}
+                                        />
+                                        <div style={{ flex: 1, fontSize: 14, color: '#262626', lineHeight: 1.5 }}>
+                                            {item.actor_name && item.title.includes(item.actor_name) ? (
+                                                <>
+                                                    {item.title.split(item.actor_name)[0]}
+                                                    <strong>{item.actor_name}</strong>
+                                                    {item.title.split(item.actor_name)[1]}
+                                                </>
+                                            ) : (
+                                                item.title
+                                            )}
+                                            {item.description && (
+                                                <div style={{ fontSize: 12, color: '#8c8c8c', marginTop: 2 }}>{item.description}</div>
+                                            )}
+                                        </div>
+                                        <span style={{ fontSize: 12, color: '#8c8c8c', flexShrink: 0 }}>{formatTimeAgo(item.createdAt)}</span>
                                     </div>
-                                    <span style={{ fontSize: 12, color: '#8c8c8c', flexShrink: 0 }}>{formatTimeAgo(item.createdAt)}</span>
-                                </div>
-                            );
-                        })
-                    )}
-                </Card>
+                                );
+                            })
+                        )}
+                    </Card>
+                </div>
             </div>
-        </div>
-    );
-}
+        );
+    }
 
 // ==================== HR DASHBOARD COMPONENT ====================
 

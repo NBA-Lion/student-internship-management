@@ -53,7 +53,15 @@ function useFetchWrapper() {
         const isLoggedIn = !!token;
         const isApiUrl = url.startsWith('/api') || url.startsWith('/admin') || url.startsWith('http');
 
-        if (isLoggedIn && isApiUrl) {
+        // Đăng nhập/đăng ký/quên mật khẩu: không gửi Bearer token cũ (tránh xung đột / parse lỗi phía client)
+        const isPublicAuth =
+            typeof url === 'string' &&
+            (
+                /\/api\/auth\/(login|register|forgot-password|reset-password|2fa\/verify-login)(?:\?|$)/.test(url) ||
+                /\/auth\/(login|register)(?:\?|$)/.test(url)
+            );
+
+        if (isLoggedIn && isApiUrl && !isPublicAuth) {
             return { Authorization: `Bearer ${token}` };
         }
         return {};
@@ -63,7 +71,8 @@ function useFetchWrapper() {
         return response.text().then(text => {
             let data = null;
             try {
-                data = text ? JSON.parse(text) : null;
+                const trimmed = (text || '').replace(/^\uFEFF/, '').trim();
+                data = trimmed ? JSON.parse(trimmed) : null;
             } catch (e) {
                 data = null;
             }
