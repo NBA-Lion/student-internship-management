@@ -50,7 +50,8 @@ function useAuthWrapper() {
 
         let rawjson;
         try {
-            rawjson = response._data != null ? response._data : await response.json();
+            // Luôn dùng .json() — tránh lệ thuộc _data (có thể lệch khi code-split/minify giữa các chunk)
+            rawjson = typeof response.json === "function" ? await response.json() : null;
         } catch (_) {
             setAlert({ message: "Lỗi kết nối", description: "Phản hồi từ máy chủ không hợp lệ." });
             return { status: "Error", data: "Phản hồi không hợp lệ" };
@@ -164,7 +165,7 @@ function useAuthWrapper() {
         }
         try {
             const response = await fetchWrapper.post("/api/auth/2fa/verify-login", "application/json", { tempToken, code: String(code).trim() });
-            const rawjson = response._data != null ? response._data : await response.json();
+            const rawjson = typeof response.json === "function" ? await response.json() : null;
             if (!rawjson || rawjson.status !== "Success" || !rawjson.user || !rawjson.token) {
                 setAlert({ message: "Xác thực thất bại", description: rawjson?.message || "Mã không đúng hoặc đã hết hạn." });
                 return { status: "Error", data: rawjson?.message || "Mã không đúng." };

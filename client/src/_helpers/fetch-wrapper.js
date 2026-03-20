@@ -107,6 +107,22 @@ function useFetchWrapper() {
                 return Promise.reject(new Error(errorMsg));
             }
 
+            // 200 OK nhưng body rỗng / không phải JSON — tránh auth-wrapper nhận _data = null
+            if (data === null) {
+                const raw = (text || "").trim();
+                let hint = "Body rỗng.";
+                if (raw.length > 0) {
+                    if (/^</i.test(raw)) {
+                        hint =
+                            "Nhận được HTML thay vì JSON (thường do Nginx/proxy trả nhầm trang tĩnh). Kiểm tra location /api/ và backend :5000.";
+                    } else {
+                        const preview = raw.slice(0, 160).replace(/\s+/g, " ");
+                        hint = `Không parse được JSON. Đầu phản hồi: ${preview}`;
+                    }
+                }
+                return Promise.reject(new Error(hint));
+            }
+
             return {
                 ok: response.ok,
                 status: response.status,
