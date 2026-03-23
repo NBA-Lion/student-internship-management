@@ -36,7 +36,12 @@ const HOST_NAME = process.env.NODE_ENV === 'production' && process.env.REACT_APP
 const API_BASE = (process.env.NODE_ENV === 'production' ? process.env.REACT_APP_BACKEND_URL : 'http://localhost:5000') || 'http://localhost:5000';
 const API_BASE_CLEAN = (API_BASE || '').replace(/\/$/, '');
 
-/** Chuẩn hóa URL file từ backend: nếu backend trả về localhost thì dùng API_BASE để link mở đúng trên Production (Vercel). */
+/**
+ * Chuẩn hóa URL file (CV, thư GT, avatar):
+ * - localhost → API_BASE
+ * - URL đầy đủ nhưng path /uploads/... → chỉ giữ path (cùng domain trang đang mở; tránh host chết DNS như pmqltt.kit.vn)
+ * - Path /uploads/... + frontend khác origin với API (Vercel+Render) → nối API_BASE
+ */
 function normalizeFileUrl(url) {
   if (!url || typeof url !== 'string') return url;
   try {
@@ -45,6 +50,35 @@ function normalizeFileUrl(url) {
       const pathPart = u.replace(/^https?:\/\/[^/]+/, '') || '/';
       return `${API_BASE_CLEAN}${pathPart.startsWith('/') ? pathPart : '/' + pathPart}`;
     }
+
+    let pathOnly = null;
+    if (u.startsWith('/uploads/')) pathOnly = u;
+    else if (/^https?:\/\//i.test(u)) {
+      try {
+        const p = new URL(u);
+        if (p.pathname.startsWith('/uploads/')) {
+          pathOnly = `${p.pathname}${p.search || ''}${p.hash || ''}`;
+        }
+      } catch (_) {
+        /* ignore */
+      }
+    }
+
+    if (pathOnly) {
+      const base = (API_BASE_CLEAN || '').replace(/\/$/, '');
+      if (typeof window === 'undefined') {
+        return base ? `${base}${pathOnly}` : pathOnly;
+      }
+      if (!base) return pathOnly;
+      try {
+        const apiOrigin = new URL(/^https?:\/\//i.test(base) ? base : `http://${base}`).origin;
+        if (window.location.origin === apiOrigin) return pathOnly;
+        return `${base}${pathOnly}`;
+      } catch (_) {
+        return `${base}${pathOnly}`;
+      }
+    }
+
     return u;
   } catch (_) {
     return url;

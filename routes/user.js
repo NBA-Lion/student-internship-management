@@ -474,8 +474,8 @@ router.post("/upload/cv", authMiddleware, upload.single("file"), async (req, res
       return res.status(400).json({ status: "Error", message: "Không có file được upload" });
     }
 
-    const baseUrl = (process.env.SERVER_URL || process.env.BACKEND_URL || "").replace(/\/$/, "") || "http://localhost:5000";
-    const fileUrl = `${baseUrl}/uploads/documents/${req.file.filename}`;
+    // Lưu path tương đối để mở CV đúng theo domain trình duyệt đang dùng (tránh host trong .env chết DNS như pmqltt.kit.vn)
+    const fileUrl = `/uploads/documents/${req.file.filename}`;
 
     // Update user's cv_url
     const studentCode = req.user.student_code;
@@ -504,8 +504,7 @@ router.post("/upload/recommendation", authMiddleware, upload.single("file"), asy
       return res.status(400).json({ status: "Error", message: "Không có file được upload" });
     }
 
-    const baseUrl = (process.env.SERVER_URL || process.env.BACKEND_URL || "").replace(/\/$/, "") || "http://localhost:5000";
-    const fileUrl = `${baseUrl}/uploads/documents/${req.file.filename}`;
+    const fileUrl = `/uploads/documents/${req.file.filename}`;
 
     // Update user's recommendation_letter_url
     const studentCode = req.user.student_code;
@@ -542,8 +541,7 @@ router.post("/upload/avatar", authMiddleware, upload.single("file"), async (req,
       return res.status(400).json({ status: "Error", message: "Chỉ chấp nhận file ảnh (JPG, PNG, GIF)" });
     }
 
-    const baseUrl = (process.env.SERVER_URL || process.env.BACKEND_URL || "").replace(/\/$/, "") || "http://localhost:5000";
-    const fileUrl = `${baseUrl}/uploads/documents/${req.file.filename}`;
+    const fileUrl = `/uploads/documents/${req.file.filename}`;
 
     // Update user's avatar (có thể thêm field avatar_url vào User model nếu cần)
     const studentCode = req.user.student_code;
