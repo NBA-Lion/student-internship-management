@@ -146,8 +146,113 @@ const sampleCompanies = [
     field: 'Điện tử - Công nghệ',
     website: 'https://samsung.com/vn',
     is_active: true
+  },
+  {
+    name: 'Trung tâm công nghệ tỉnh Lào Cai',
+    address: 'Tỉnh Lào Cai',
+    email: 'ttcnt.laocai@intern.local',
+    field: 'Công nghệ thông tin & Chuyển đổi số',
+    website: '',
+    phone: '0214-3832-xxx',
+    contact_person: 'Phòng Tổ chức – Nhân sự',
+    is_active: true,
+    description: 'Đơn vị đối tác thực tập (mẫu QLSVTT – đợt xuân 2026)'
   }
 ];
+
+/**
+ * Gói mẫu QLSVTT: SV Nguyễn Bình Anh + TT CNTT Lào Cai + đợt Xuân 2026 + mentor Vũ Đức Hiếu.
+ * Chạy mỗi lần seed (không phụ thuộc needSeed) để bổ sung trên DB đã có dữ liệu.
+ */
+async function ensureLaoCaiQlsvttDemo() {
+  const companyName = 'Trung tâm công nghệ tỉnh Lào Cai';
+  const company = await Company.findOne({ name: companyName });
+  if (!company) {
+    console.log(`  ⚠️ Chưa có doanh nghiệp "${companyName}" trong DB — bỏ qua gói mẫu Lào Cai.`);
+    return;
+  }
+
+  const periodCode = '2026-XUAN';
+  let period = await InternshipPeriod.findOne({ code: periodCode });
+  if (!period) {
+    period = await InternshipPeriod.create({
+      code: periodCode,
+      name: 'Đợt xuân 2026',
+      startDate: new Date('2026-02-01'),
+      endDate: new Date('2026-05-31'),
+      status: 'OPEN',
+      description: 'Đợt thực tập xuân 2026 (mẫu)',
+      registrationDeadline: new Date('2026-01-25'),
+      start_date: new Date('2026-02-01'),
+      end_date: new Date('2026-05-31'),
+      is_active: true
+    });
+    console.log(`  ✅ Tạo đợt thực tập: ${period.name} (${periodCode})`);
+  } else {
+    console.log(`  ⏭️ Đợt đã tồn tại: ${periodCode}`);
+  }
+
+  const hrCode = 'HR_LAOCAI_TTCN';
+  let hrUser = await User.findOne({ student_code: hrCode });
+  if (!hrUser) {
+    const hash = await bcrypt.hash('123', 10);
+    hrUser = await User.create({
+      student_code: hrCode,
+      full_name: 'HR – Trung tâm CNTT tỉnh Lào Cai',
+      email: 'hr.ttcnt.laocai@intern.local',
+      password: hash,
+      role: 'company_hr',
+      company_id: company._id
+    });
+    console.log(`  ✅ Tạo HR: ${hrCode}`);
+  }
+
+  const mentorCode = 'MENTOR_VDHIEU';
+  let mentorUser = await User.findOne({ student_code: mentorCode });
+  if (!mentorUser) {
+    const hash = await bcrypt.hash('123', 10);
+    mentorUser = await User.create({
+      student_code: mentorCode,
+      full_name: 'Vũ Đức Hiếu',
+      email: 'vu.duc.hieu.qlsv@intern.local',
+      password: hash,
+      role: 'mentor',
+      company_id: company._id
+    });
+    console.log(`  ✅ Tạo Mentor: Vũ Đức Hiếu (${mentorCode})`);
+  }
+
+  const studentCode = 'SV_BINHANH';
+  const existingStudent = await User.findOne({ student_code: studentCode });
+  if (!existingStudent) {
+    const hash = await bcrypt.hash('123', 10);
+    await User.create({
+      student_code: studentCode,
+      full_name: 'Nguyễn Bình Anh',
+      email: 'nguyen.binh.anh.qlsv@intern.local',
+      password: hash,
+      role: 'student',
+      university: 'Trung tâm CNTT',
+      faculty: 'Công nghệ thông tin',
+      major: 'Công nghệ thông tin',
+      class_name: 'QLSVTT-DEMO',
+      internship_status: 'Đang thực tập',
+      internship_unit: companyName,
+      internship_topic: 'Thực tập tại Trung tâm Công nghệ tỉnh Lào Cai (đợt xuân 2026)',
+      internship_period: periodCode,
+      internship_period_id: period._id,
+      company_id: company._id,
+      mentor_id: mentorUser._id,
+      mentor_name: mentorUser.full_name,
+      mentor_email: mentorUser.email,
+      start_date: new Date('2026-02-01'),
+      end_date: new Date('2026-05-31')
+    });
+    console.log(`  ✅ Tạo sinh viên mẫu: ${studentCode} – Nguyễn Bình Anh`);
+  } else {
+    console.log(`  ⏭️ Sinh viên mẫu đã tồn tại: ${studentCode}`);
+  }
+}
 
 async function seed() {
   try {
@@ -273,6 +378,9 @@ async function seed() {
       console.log('  ✅ Gán company_id FPT Software cho SV001, SV002');
     }
 
+    console.log('\n📌 Gói mẫu QLSVTT (Lào Cai – xuân 2026):');
+    await ensureLaoCaiQlsvttDemo();
+
     // Hiển thị thông tin đăng nhập
     console.log('\n🔐 THÔNG TIN ĐĂNG NHẬP MẪU:');
     console.log('  Admin:        ADMIN / 123');
@@ -282,6 +390,10 @@ async function seed() {
     console.log('  Student:      SV004 / 123 (Từ chối)');
     console.log('  Company HR:   HR_FPT / 123  (FPT Software)');
     console.log('  Mentor (FPT): MENTOR_FPT / 123');
+    console.log('  --- QLSVTT mẫu Lào Cai (đợt xuân 2026) ---');
+    console.log('  Student:      SV_BINHANH / 123  (Nguyễn Bình Anh)');
+    console.log('  Company HR:   HR_LAOCAI_TTCN / 123');
+    console.log('  Mentor:       MENTOR_VDHIEU / 123  (Vũ Đức Hiếu)');
 
   } catch (error) {
     console.error('❌ Lỗi:', error.message);
