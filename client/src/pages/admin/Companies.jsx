@@ -22,6 +22,11 @@ export default function AdminCompanies() {
   const [createHrVisible, setCreateHrVisible] = useState(false);
   const [hrForm] = Form.useForm();
 
+  const [editVisible, setEditVisible] = useState(false);
+  const [editLoading, setEditLoading] = useState(false);
+  const [editCompany, setEditCompany] = useState(null);
+  const [companyEditForm] = Form.useForm();
+
   useEffect(() => {
     if (userData.role !== 'admin') {
       history.replace('/');
