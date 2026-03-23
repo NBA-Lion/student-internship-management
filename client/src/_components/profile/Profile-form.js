@@ -184,7 +184,12 @@ function ProfileForm(props) {
 
     useEffect(() => {
         if (data) {
-            const isAdminRole = data.role === 'admin' || data.role === 'mentor' || data.role === 'teacher';
+            // Đồng bộ form với HR (company_hr) giống mentor/admin — tránh field lệch và payload sai
+            const isAdminRole =
+                data.role === 'admin' ||
+                data.role === 'mentor' ||
+                data.role === 'teacher' ||
+                data.role === 'company_hr';
             const initialValues = getFormValuesFromData(data, isAdminRole);
             form.setFieldsValue(initialValues);
         }
@@ -312,13 +317,15 @@ function ProfileForm(props) {
             // Submit
             const userId = data?.student_code || data?.vnu_id || 'me';
             const updated = await profileAction.handleSubmit(updateData, userId, isTable);
-            antdMessage.success('Đã cập nhật thông tin thành công');
-            setPasswordSwitch(false);
-            // Cập nhật form + localData ngay từ response (tránh hiển thị lại giá trị cũ khi admin đổi mã nhân viên)
-            if (updated && isAdmin) {
-                const nextValues = getFormValuesFromData(updated, true);
-                form.setFieldsValue(nextValues);
-                setLocalData(prev => (prev ? { ...prev, ...updated } : updated));
+            if (updated) {
+                antdMessage.success('Đã cập nhật thông tin thành công');
+                setPasswordSwitch(false);
+                // Cập nhật form + localData ngay từ response (tránh hiển thị lại giá trị cũ)
+                if (isAdmin) {
+                    const nextValues = getFormValuesFromData(updated, true);
+                    form.setFieldsValue(nextValues);
+                    setLocalData(prev => (prev ? { ...prev, ...updated } : updated));
+                }
             }
         } catch (e) {
             console.error('Submit error:', e);

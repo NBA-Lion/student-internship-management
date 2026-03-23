@@ -215,6 +215,8 @@ router.post("/profile/:id", authMiddleware, async (req, res) => {
       return res.status(404).json({ status: "Error", message: "Không tìm thấy người dùng" });
     }
 
+    const isSelf = requesterId === targetId;
+
     // Các trường cho phép user tự sửa (bao gồm class_name, parent_number, address)
     const allowedFieldsForUser = [
       "name", "full_name", "phone_number", "parent_number", "address", "date_of_birth", "gender",
@@ -250,9 +252,15 @@ router.post("/profile/:id", authMiddleware, async (req, res) => {
       // Kiểm tra quyền
       const isAllowedForUser = allowedFieldsForUser.includes(frontendField);
       const isAdminOnly = adminOnlyFields.includes(frontendField);
+      // Mentor / HR được tự sửa "mã nhân viên hiển thị" của chính họ (không phải quyền admin toàn hệ thống)
+      const staffSelfEmployeeCode =
+        isAdminOnly &&
+        frontendField === "employee_code" &&
+        isSelf &&
+        (requesterRole === "mentor" || requesterRole === "company_hr");
 
       if (!isAllowedForUser && !isAdminOnly) continue; // Bỏ qua field không hợp lệ
-      if (isAdminOnly && requesterRole !== "admin") continue; // Chỉ Admin (Nhà trường) mới sửa được field quản lý
+      if (isAdminOnly && requesterRole !== "admin" && !staffSelfEmployeeCode) continue;
 
       // Map sang tên field trong DB
       const dbField = fieldMapping[frontendField] || frontendField;
