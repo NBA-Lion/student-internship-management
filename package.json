@@ -10,6 +10,7 @@
     "reset-password": "node scripts/reset-password.js"
   },
   "dependencies": {
+    "dotenv": "^16.4.7",
     "bcryptjs": "^2.4.3",
     "body-parser": "^1.20.3",
     "cors": "^2.8.5",

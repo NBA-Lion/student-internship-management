@@ -10,6 +10,8 @@
  *   - Tham số 2: mật khẩu mới (mặc định: 123)
  */
 
+require("dotenv").config({ path: require("path").join(__dirname, "..", ".env") });
+
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const User = require("../models/User");
