@@ -333,6 +333,106 @@ router.get("/companies", authMiddleware, adminOnly, async (req, res) => {
 });
 
 // ============================================
+// GET /api/admin/companies/:id - Chi tiết doanh nghiệp (chỉnh sửa)
+// ============================================
+router.get("/companies/:id", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ status: "Error", message: "ID doanh nghiệp không hợp lệ" });
+    }
+    const company = await Company.findById(id).lean();
+    if (!company) {
+      return res.status(404).json({ status: "Error", message: "Không tìm thấy doanh nghiệp" });
+    }
+    return res.json({
+      status: "Success",
+      data: {
+        _id: company._id,
+        name: company.name,
+        address: company.address || "",
+        email: company.email || "",
+        phone: company.phone || "",
+        field: company.field || "",
+        website: company.website || "",
+        contact_person: company.contact_person || "",
+        description: company.description || "",
+        is_active: company.is_active !== false,
+      },
+    });
+  } catch (error) {
+    console.error(">>> [Admin Route] Lỗi lấy chi tiết doanh nghiệp:", error.message);
+    return res.status(500).json({ status: "Error", message: "Lỗi server", error: error.message });
+  }
+});
+
+// ============================================
+// PUT /api/admin/companies/:id - Cập nhật thông tin doanh nghiệp (email, SĐT, địa chỉ, ...)
+// ============================================
+router.put("/companies/:id", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ status: "Error", message: "ID doanh nghiệp không hợp lệ" });
+    }
+    const company = await Company.findById(id);
+    if (!company) {
+      return res.status(404).json({ status: "Error", message: "Không tìm thấy doanh nghiệp" });
+    }
+
+    const allowed = [
+      "name",
+      "address",
+      "email",
+      "phone",
+      "field",
+      "website",
+      "contact_person",
+      "description",
+    ];
+    const body = req.body || {};
+    for (const key of allowed) {
+      if (Object.prototype.hasOwnProperty.call(body, key)) {
+        const v = body[key];
+        company[key] = v == null ? "" : String(v).trim();
+      }
+    }
+
+    if (company.email) {
+      company.email = company.email.toLowerCase();
+    }
+
+    await company.save();
+
+    return res.json({
+      status: "Success",
+      message: "Đã cập nhật thông tin doanh nghiệp.",
+      data: {
+        _id: company._id,
+        name: company.name,
+        address: company.address || null,
+        email: company.email || null,
+        phone: company.phone || null,
+        field: company.field || null,
+        website: company.website || null,
+        contact_person: company.contact_person || null,
+        description: company.description || null,
+        is_active: company.is_active !== false,
+      },
+    });
+  } catch (error) {
+    if (error && error.code === 11000) {
+      return res.status(400).json({
+        status: "Error",
+        message: "Tên hoặc email doanh nghiệp bị trùng với bản ghi khác.",
+      });
+    }
+    console.error(">>> [Admin Route] Lỗi cập nhật doanh nghiệp:", error.message);
+    return res.status(500).json({ status: "Error", message: "Lỗi server", error: error.message });
+  }
+});
+
+// ============================================
 // PUT /api/admin/companies/:id/toggle-active - Vô hiệu hóa / Kích hoạt doanh nghiệp (ngừng hợp tác)
 // ============================================
 router.put("/companies/:id/toggle-active", authMiddleware, adminOnly, async (req, res) => {

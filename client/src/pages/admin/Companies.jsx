@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useHistory } from 'react-router-dom';
-import { Table, Card, Button, Modal, Form, Input, message, Row, Col, Tag, Typography, Popconfirm, Space } from 'antd';
-import { BankOutlined, UserOutlined, MailOutlined, PhoneOutlined, PlusOutlined, TeamOutlined, StopOutlined, CheckCircleOutlined, DeleteOutlined } from '@ant-design/icons';
+import { Table, Card, Button, Modal, Form, Input, message, Row, Col, Tag, Typography, Popconfirm, Space, Breadcrumb } from 'antd';
+import { BankOutlined, UserOutlined, MailOutlined, PhoneOutlined, PlusOutlined, TeamOutlined, StopOutlined, CheckCircleOutlined, DeleteOutlined, EditOutlined, GlobalOutlined } from '@ant-design/icons';
 import { useFetchWrapper } from '_helpers';
 import { getUserData } from '_helpers/auth-storage';
 
@@ -90,6 +90,65 @@ export default function AdminCompanies() {
     await loadHrs(company._id);
   }
 
+  async function openEditCompany(record) {
+    setEditCompany(record);
+    setEditVisible(true);
+    companyEditForm.resetFields();
+    try {
+      setEditLoading(true);
+      const res = await fetchWrapper.get(`/api/admin/companies/${record._id}`);
+      const data = await res.json();
+      if (data.status === 'Success' && data.data) {
+        companyEditForm.setFieldsValue({
+          name: data.data.name,
+          address: data.data.address || '',
+          email: data.data.email || '',
+          phone: data.data.phone || '',
+          field: data.data.field || '',
+          website: data.data.website || '',
+          contact_person: data.data.contact_person || '',
+          description: data.data.description || '',
+        });
+      } else {
+        throw new Error(data.message || 'Không tải được chi tiết');
+      }
+    } catch (e) {
+      message.error(e.message || 'Không tải được chi tiết doanh nghiệp');
+      setEditVisible(false);
+      setEditCompany(null);
+    } finally {
+      setEditLoading(false);
+    }
+  }
+
+  async function handleSaveCompany() {
+    if (!editCompany) return;
+    try {
+      const values = await companyEditForm.validateFields();
+      setEditLoading(true);
+      const res = await fetchWrapper.put(
+        `/api/admin/companies/${editCompany._id}`,
+        'application/json',
+        values
+      );
+      const data = await res.json();
+      if (data.status === 'Success') {
+        message.success(data.message || 'Đã cập nhật');
+        setEditVisible(false);
+        setEditCompany(null);
+        companyEditForm.resetFields();
+        loadCompanies();
+      } else {
+        throw new Error(data.message || 'Cập nhật thất bại');
+      }
+    } catch (e) {
+      if (e?.errorFields) return;
+      message.error(e.message || 'Không thể lưu');
+    } finally {
+      setEditLoading(false);
+    }
+  }
+
   async function loadHrs(companyId) {
     try {
       setHrLoading(true);
@@ -172,9 +231,17 @@ export default function AdminCompanies() {
     {
       title: 'Thao tác',
       key: 'action',
-      width: 260,
+      width: 320,
       render: (_, record) => (
-        <Space>
+        <Space wrap>
+          <Button
+            size="small"
+            type="link"
+            icon={<EditOutlined />}
+            onClick={() => openEditCompany(record)}
+          >
+            Sửa DN
+          </Button>
           <Button size="small" type="link" onClick={() => openHrModal(record)}>
             Quản lý HR
           </Button>
@@ -230,6 +297,14 @@ export default function AdminCompanies() {
   return (
     <div className="p-4" style={{ paddingTop: 24 }}>
       <div className="container">
+        <Breadcrumb style={{ marginBottom: 16, fontSize: 13, color: '#8c8c8c' }}>
+          <Breadcrumb.Item>
+            <span style={{ cursor: 'pointer', color: '#8c8c8c' }} onClick={() => history.push('/')}>
+              Trang chủ
+            </span>
+          </Breadcrumb.Item>
+          <Breadcrumb.Item>Doanh nghiệp &amp; HR</Breadcrumb.Item>
+        </Breadcrumb>
         <Title level={3} style={{ marginBottom: 16 }}>
           Quản lý Doanh nghiệp &amp; Tài khoản HR
         </Title>
@@ -242,6 +317,52 @@ export default function AdminCompanies() {
             pagination={{ pageSize: 10 }}
           />
         </Card>
+
+        {/* Sửa thông tin doanh nghiệp (email / SĐT / địa chỉ hiển thị trên bảng) */}
+        <Modal
+          title={editCompany ? `Sửa doanh nghiệp: ${editCompany.name}` : 'Sửa doanh nghiệp'}
+          visible={editVisible}
+          onCancel={() => {
+            setEditVisible(false);
+            setEditCompany(null);
+            companyEditForm.resetFields();
+          }}
+          onOk={handleSaveCompany}
+          confirmLoading={editLoading}
+          width={560}
+          destroyOnClose
+        >
+          <Form form={companyEditForm} layout="vertical" preserve={false}>
+            <Form.Item name="name" label="Tên doanh nghiệp" rules={[{ required: true, message: 'Nhập tên' }]}>
+              <Input prefix={<BankOutlined />} placeholder="Tên công ty / đơn vị" />
+            </Form.Item>
+            <Form.Item name="field" label="Lĩnh vực">
+              <Input placeholder="VD: Công nghệ thông tin" />
+            </Form.Item>
+            <Form.Item
+              name="email"
+              label="Email liên hệ (doanh nghiệp)"
+              rules={[{ type: 'email', message: 'Email không hợp lệ' }]}
+            >
+              <Input prefix={<MailOutlined />} placeholder="email@domain.gov.vn" />
+            </Form.Item>
+            <Form.Item name="phone" label="Số điện thoại (hiển thị trên danh sách)">
+              <Input prefix={<PhoneOutlined />} placeholder="VD: 02143.841.889" />
+            </Form.Item>
+            <Form.Item name="address" label="Địa chỉ">
+              <Input.TextArea rows={2} placeholder="Địa chỉ trụ sở" />
+            </Form.Item>
+            <Form.Item name="website" label="Website">
+              <Input prefix={<GlobalOutlined />} placeholder="https://..." />
+            </Form.Item>
+            <Form.Item name="contact_person" label="Người liên hệ">
+              <Input placeholder="Họ tên người liên hệ" />
+            </Form.Item>
+            <Form.Item name="description" label="Mô tả / ghi chú">
+              <Input.TextArea rows={2} placeholder="Tuỳ chọn" />
+            </Form.Item>
+          </Form>
+        </Modal>
 
         {/* Modal danh sách HR của 1 company */}
         <Modal

@@ -130,13 +130,31 @@ router.post("/login", async (req, res) => {
   }
 });
 
+// Chỉ cho phép đăng ký tài khoản sinh viên; không spread toàn bộ req.body (tránh gửi role: admin từ client lạ)
 router.post("/register", async (req, res) => {
   try {
-    const body = { ...req.body };
-    if (body.password) {
-      body.password = await bcrypt.hash(body.password, 10);
+    const { full_name, student_code, email, password } = req.body || {};
+    if (!full_name || !String(full_name).trim()) {
+      return res.status(400).json({ message: "Vui lòng nhập họ và tên." });
     }
-    const user = await User.create(body);
+    if (!student_code || !String(student_code).trim()) {
+      return res.status(400).json({ message: "Vui lòng nhập mã số sinh viên." });
+    }
+    if (!email || !String(email).trim()) {
+      return res.status(400).json({ message: "Vui lòng nhập email." });
+    }
+    if (!password || String(password).length < 6) {
+      return res.status(400).json({ message: "Mật khẩu tối thiểu 6 ký tự." });
+    }
+
+    const hashedPassword = await bcrypt.hash(String(password), 10);
+    const user = await User.create({
+      full_name: String(full_name).trim(),
+      student_code: String(student_code).trim(),
+      email: String(email).trim().toLowerCase(),
+      password: hashedPassword,
+      role: "student",
+    });
     const token = generateToken(user);
 
     const userResponse = user.toObject();

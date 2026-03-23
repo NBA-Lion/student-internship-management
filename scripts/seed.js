@@ -151,11 +151,11 @@ const sampleCompanies = [
   },
   {
     name: 'Trung tâm công nghệ tỉnh Lào Cai',
-    address: 'Tỉnh Lào Cai',
-    email: 'ttcnt.laocai@intern.local',
+    address: 'Số 1227 đường Yên Ninh, Phường Yên Bái, Lào Cai',
+    email: 'trungtamcntt@laocai.gov.vn',
     field: 'Công nghệ thông tin & Chuyển đổi số',
     website: '',
-    phone: '0214-3832-xxx',
+    phone: '02143.841.889',
     contact_person: 'Phòng Tổ chức – Nhân sự',
     is_active: true,
     description: 'Đơn vị đối tác thực tập (mẫu QLSVTT – đợt xuân 2026)'

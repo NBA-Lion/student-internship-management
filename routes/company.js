@@ -123,6 +123,13 @@ router.get("/mentors", authMiddleware, companyHrOnly, async (req, res) => {
 // ============================================
 router.post("/mentors", authMiddleware, companyHrOnly, async (req, res) => {
   try {
+    if (!req.user.company_id) {
+      return res.status(400).json({
+        status: "Error",
+        message: "Tài khoản HR chưa được gán doanh nghiệp. Không thể tạo Mentor.",
+      });
+    }
+
     const { student_code, full_name, email, password, phone, employee_code } = req.body;
 
     if (!student_code || !student_code.trim()) {
@@ -157,7 +164,7 @@ router.post("/mentors", authMiddleware, companyHrOnly, async (req, res) => {
       email: String(email).trim().toLowerCase(),
       password: hashedPassword,
       role: "mentor",
-      company_id: req.user.company_id || null,
+      company_id: req.user.company_id,
       phone: phone ? String(phone).trim() : null,
       employee_code: employee_code ? String(employee_code).trim() : null,
     });

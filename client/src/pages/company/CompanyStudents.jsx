@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useHistory } from 'react-router-dom';
-import { Table, Button, Select, Input, Modal, Form, message, Card, Tag, Space, Popconfirm } from 'antd';
+import { Table, Button, Select, Input, Modal, Form, message, Card, Tag, Space, Popconfirm, Breadcrumb } from 'antd';
 import { TeamOutlined, UserAddOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useFetchWrapper } from '_helpers';
 import { getUserData } from '_helpers/auth-storage';
@@ -225,6 +225,14 @@ export default function CompanyStudents() {
 
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto', padding: 24 }}>
+      <Breadcrumb style={{ marginBottom: 16, fontSize: 13, color: '#8c8c8c' }}>
+        <Breadcrumb.Item>
+          <span style={{ cursor: 'pointer', color: '#8c8c8c' }} onClick={() => history.push('/')}>
+            Trang chủ
+          </span>
+        </Breadcrumb.Item>
+        <Breadcrumb.Item>Danh sách SV &amp; Gán Mentor</Breadcrumb.Item>
+      </Breadcrumb>
       <Card title={<><TeamOutlined /> Danh sách sinh viên &amp; Gán Mentor</>} extra={
         <Button type="primary" icon={<UserAddOutlined />} onClick={() => setCreateMentorVisible(true)}>
           Thêm Mentor
