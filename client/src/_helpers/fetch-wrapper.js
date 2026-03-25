@@ -142,12 +142,19 @@ function useFetchWrapper() {
         if (!API_BASE_CLEAN) {
             return url;
         }
-        // Khi chạy sau reverse proxy (Nginx) thì giữ các path "/api", "/auth", ...
-        // để request đi qua cùng origin (tránh gọi thẳng backend/private IP gây lỗi CORS/HTML).
-        const sameOriginPrefixes = ['/api', '/auth', '/admin', '/uploads', '/socket.io', '/health'];
-        if (sameOriginPrefixes.some((p) => url.startsWith(p))) {
-            return url;
+        // Trên Vercel/Render không có reverse-proxy cùng origin, vì vậy cần nối API_BASE
+        // để các request như "/api/auth/login" không bị gửi nhầm sang domain Vercel.
+        try {
+            if (typeof window !== 'undefined') {
+                // Nếu backend cùng origin với frontend (self-host) thì giữ nguyên path.
+                const pageOrigin = window.location.origin;
+                const apiOrigin = new URL(API_BASE_CLEAN, window.location.origin).origin;
+                if (pageOrigin === apiOrigin) return url;
+            }
+        } catch (_) {
+            // ignore
         }
+
         if (url.startsWith('/')) return `${API_BASE_CLEAN}${url}`;
         return `${API_BASE_CLEAN}/${url}`;
     }

@@ -1,4 +1,4 @@
-        const express = require("express");
+const express = require("express");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
@@ -599,10 +599,10 @@ router.post("/users", authMiddleware, upload.single("file"), async (req, res) =>
         };
 
         // Additional fields cho Sinh viên
-        userData.university = row.university;
-        userData.faculty = row.faculty;
-        userData.major = row.major;
-        userData.class_name = row.class_name;
+          userData.university = row.university;
+          userData.faculty = row.faculty;
+          userData.major = row.major;
+          userData.class_name = row.class_name;
         userData.parent_number = row.parent_number ? String(row.parent_number).trim() : undefined;
         userData.address = (row.address || row.location) ? String(row.address || row.location).trim() : undefined;
 
@@ -947,7 +947,7 @@ router.post("/grades", authMiddleware, upload.single("file"), async (req, res) =
       const byIndex = parseGradesByColumnIndex(fileBuffer);
       rawData = byIndex.data || [];
     }
-
+    
     if (rawData.length === 0) {
       return res.status(400).json({ status: "Error", message: "File không có dữ liệu (cần ít nhất 1 dòng dữ liệu sau dòng tiêu đề). Đảm bảo có cột Mã sinh viên/MSSV/VNU-ID và Điểm/Nhận xét." });
     }
@@ -1086,7 +1086,7 @@ router.post("/status", authMiddleware, upload.single("file"), async (req, res) =
       const byIndex = parseStatusByColumnIndex(fileBuffer);
       rawData = byIndex.data || [];
     }
-
+    
     if (rawData.length === 0) {
       return res.status(400).json({ status: "Error", message: "File không có dữ liệu (cần ít nhất 1 dòng dữ liệu sau dòng tiêu đề). Đảm bảo có cột Mã sinh viên/MSSV/VNU-ID và Trạng thái." });
     }
@@ -1122,10 +1122,10 @@ router.post("/status", authMiddleware, upload.single("file"), async (req, res) =
         }
 
         if (!validStatuses.includes(statusRaw)) {
-          failed.push({
+          failed.push({ 
             ...displayRow,
-            error: `Dòng ${rowNum}: Trạng thái không hợp lệ. Chọn: ${validStatuses.join(", ")}`,
-            rowNum
+            error: `Dòng ${rowNum}: Trạng thái không hợp lệ. Chọn: ${validStatuses.join(", ")}`, 
+            rowNum 
           });
           continue;
         }
@@ -1138,11 +1138,11 @@ router.post("/status", authMiddleware, upload.single("file"), async (req, res) =
         bulkOps.push({
           updateOne: {
             filter: { student_code: studentCode },
-            update: {
-              $set: {
+            update: { 
+              $set: { 
                 internship_status: normalizedStatus,
                 registration_status: normalizedStatus
-              }
+              } 
             }
           }
         });

@@ -14,7 +14,8 @@ import {
     DatabaseOutlined,
     BarChartOutlined,
     TeamOutlined,
-    SolutionOutlined
+    SolutionOutlined,
+    EnvironmentOutlined,
 } from '@ant-design/icons';
 
 const { Sider } = Layout;
@@ -58,6 +59,12 @@ function Nav(props) {
                     <HomeOutlined />
                     <span>Trang chủ</span>
                     <Link to="/"></Link>
+                </Menu.Item>
+
+                <Menu.Item key="/gioi-thieu-lao-cai">
+                    <EnvironmentOutlined />
+                    <span>Giới thiệu Lào Cai</span>
+                    <Link to="/gioi-thieu-lao-cai" />
                 </Menu.Item>
 
                 {/* Menu cho Admin (Nhà trường) */}

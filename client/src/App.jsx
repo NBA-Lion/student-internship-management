@@ -1,5 +1,5 @@
 import React, { useEffect, useState, Suspense, lazy } from 'react';
-import { BrowserRouter as Router, Switch, Route, Redirect, useParams, useHistory } from 'react-router-dom';
+import { BrowserRouter as Router, Switch, Route, Redirect, useParams, useHistory, useLocation } from 'react-router-dom';
 import { useRecoilState, useRecoilValue } from 'recoil';
 import { Layout, Row, Col, Spin, Modal, Button } from 'antd';
 import Title from 'antd/lib/typography/Title';
@@ -33,6 +33,7 @@ const StuHome = lazy(() => import('home/StuHome').then(m => ({ default: m.StuHom
 const InternshipTabs = lazy(() => import('_components/internship/InternshipTabs').then(m => ({ default: m.default })));
 const CompanyStudents = lazy(() => import('pages/company/CompanyStudents').then(m => ({ default: m.default })));
 const MentorStudents = lazy(() => import('pages/mentor/MentorStudents').then(m => ({ default: m.default })));
+const LaoCaiIntro = lazy(() => import('pages/laocai/LaoCaiIntro').then(m => ({ default: m.default })));
 
 // ========== FIX ResizeObserver Loop Error (không vi phạm quy tắc import) ==========
 // Một số component (Table, Layout) dùng ResizeObserver gây ra warning
@@ -131,6 +132,37 @@ function SessionExpiredModal() {
 
 const { Header, Content } = Layout;
 
+/** Trang Giới thiệu Lào Cai: ẩn dòng tiêu đề cổng QL (tránh chồng lên nội dung hero). */
+function AppMainHeader() {
+    const location = useLocation();
+    const hideQlTitle = location.pathname === '/gioi-thieu-lao-cai';
+
+    return (
+        <Header style={{ position: 'sticky', top: 0, zIndex: 100, width: '100%' }}>
+            <Row gutter={0} align="middle">
+                <Col className="gutter-row" flex="1 1 500px">
+                    <div>
+                        {!hideQlTitle ? (
+                            <Title style={{ padding: '15px 0 0 0', color: 'white', marginBottom: 8 }} level={3}>
+                                Website Quản lý Sinh viên Thực tập
+                            </Title>
+                        ) : (
+                            <div style={{ minHeight: 48, paddingTop: 12 }} aria-hidden />
+                        )}
+                    </div>
+                </Col>
+                <Col style={{ minWidth: '300px' }} span="auto">
+                    <div>
+                        <div style={{ color: 'white', fontSize: '14px', textAlign: 'right', marginRight: '20px' }}>
+                            <b>{ClassNameDisplay()}</b>
+                        </div>
+                    </div>
+                </Col>
+            </Row>
+        </Header>
+    );
+}
+
 export { App };
 
 function App() {
@@ -173,22 +205,7 @@ function App() {
                     {/* All other pages - WITH Layout wrapper */}
                     <Route>
                         <Layout style={{ minHeight: '100vh' }}>
-                            <Header style={{ position: 'sticky', top: 0, zIndex: 1, width: '100%' }}>
-                                <Row gutter={0}>
-                                    <Col className="gutter-row" flex="1 1 500px">
-                                        <div>
-                                            <Title style={{ padding: '15px 0 0 0', color: 'white' }} level={3}>Website Quản lý Sinh viên Thực tập</Title>
-                                        </div>
-                                    </Col>
-                                    <Col style={{minWidth:"300px"}} span='auto'>
-                                        <div>
-                                            <div style={{color: 'white', fontSize: '14px', textAlign: 'right', marginRight:'20px'}}> 
-                                                <b>{ClassNameDisplay()}</b>
-                                            </div>
-                                        </div>
-                                    </Col>
-                                </Row>
-                            </Header> 
+                            <AppMainHeader />
                             <Layout>
                                 <Nav onLogout={userActions.logout} auth={authWrapper.tokenValue} userData={userData} classID={classWrapper.curClass ? (classWrapper.curClass._id || classWrapper.curClass.class_id) : ""}/>
                                 
@@ -206,6 +223,7 @@ function App() {
                                                 <PrivateRoute exact path="/company/students" component={CompanyStudents} />
                                                 <PrivateRoute exact path="/mentor/students" component={MentorStudents} />
                                                 <PrivateRoute exact path="/internship" component={InternshipTabs} />
+                                                <PrivateRoute exact path="/gioi-thieu-lao-cai" component={LaoCaiIntro} />
                                                 <PrivateRoute path="/:classID" component={Child} />
                                                 <Redirect from="*" to="/" />
                                             </Switch>
